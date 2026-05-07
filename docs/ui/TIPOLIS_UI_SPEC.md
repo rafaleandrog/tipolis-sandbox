@@ -13,6 +13,11 @@
 >
 > **UI contract:** Any new page, card, dashboard, or text section that does not follow these tokens/components is considered out of spec and must be refactored before merge.
 
+> **Primary UI colors (global default):** deep navy backgrounds, white primary text, and gold accent (`--color-gold-400`).
+> 
+> **Exception rule:** Different colors are allowed only when explicitly defined by each page/project/word treatment (e.g., `general/index.html` has intentional local highlights).
+> 
+
 ---
 
 ## 1. Guiding Aesthetic
