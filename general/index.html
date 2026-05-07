@@ -4,6 +4,11 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Tipolis — Strategic Capital Proposal 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Jost:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/tipolis-design-system.css" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -2859,9 +2864,19 @@ function PageWhyNow(){
    APP
 ═══════════════════════════════════════════════════════ */
 const css=`
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:#00263D;color:#FFF;font-family:'DM Sans',sans-serif;line-height:1.6}
+html,body{
+  background:var(--color-bg-dark,#0D1E35);
+  color:var(--color-text-on-dark,#FFFFFF);
+  font-family:var(--font-body,'Jost','DM Sans',system-ui,sans-serif);
+  line-height:var(--leading-normal,1.6);
+}
+#root{min-height:100vh}
+h1,h2,h3,h4{
+  font-family:var(--font-display,'Cormorant Garamond',serif);
+  letter-spacing:var(--tracking-tight,-0.02em);
+}
+button,input,textarea,select{font:inherit}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 `;
 
