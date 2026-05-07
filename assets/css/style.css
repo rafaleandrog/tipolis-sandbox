@@ -5,8 +5,8 @@
 body {
   margin: 0;
   font-family: var(--font-body);
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
+  background: linear-gradient(180deg, var(--color-navy-950), var(--color-navy-900));
+  color: var(--color-text-on-dark);
 }
 
 .container {
@@ -24,7 +24,7 @@ h1 {
   font-family: var(--font-display);
   font-weight: 400;
   font-size: clamp(var(--text-3xl), 5vw, var(--text-5xl));
-  color: var(--color-navy-900);
+  color: var(--color-text-on-dark);
 }
 
 h2 {
@@ -32,12 +32,12 @@ h2 {
   font-family: var(--font-body);
   font-weight: 500;
   font-size: var(--text-xl);
-  color: var(--color-navy-900);
+  color: var(--color-text-on-dark);
 }
 
 p {
   margin-bottom: var(--space-3);
-  color: var(--color-text-secondary);
+  color: var(--color-gold-100);
 }
 
 .grid {
@@ -47,44 +47,53 @@ p {
 }
 
 .card {
-  background: var(--color-bg-card-light);
-  border: 1px solid var(--color-border-light);
+  background: color-mix(in srgb, var(--color-bg-card-dark) 94%, black);
+  border: 1px solid var(--color-border-dark);
   border-left: 3px solid var(--color-divider-accent);
   padding: var(--space-6);
 }
 
+.grid a {
+  display: block;
+  background: color-mix(in srgb, var(--color-navy-900) 90%, black);
+  border: 1px solid var(--color-border-dark);
+  border-left: 2px solid var(--color-divider-accent);
+  padding: var(--space-4) var(--space-5);
+}
+
 a {
-  color: var(--color-navy-900);
+  color: var(--color-text-on-dark);
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
+  transition: border-color var(--transition-fast), color var(--transition-fast), background-color var(--transition-fast);
 }
 
 a:hover {
-  color: var(--color-accent-primary);
+  color: var(--color-gold-200);
   border-color: var(--color-accent-primary);
+  background-color: var(--color-navy-700);
 }
 
 small {
-  color: var(--color-text-muted);
+  color: var(--color-gold-100);
 }
 
 footer {
   margin-top: var(--space-10);
-  color: var(--color-text-muted);
+  color: var(--color-gold-100);
 }
 
 summary {
   cursor: pointer;
-  color: var(--color-navy-900);
+  color: var(--color-text-on-dark);
   margin-bottom: var(--space-2);
 }
 
 details {
   padding: var(--space-3) 0;
-  border-top: 1px solid var(--color-border-light);
+  border-top: 1px solid var(--color-border-dark);
 }
 
 details:last-child {
-  border-bottom: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--color-border-dark);
 }
