@@ -1,7 +1,17 @@
-# Tipolis — UI & Visual Identity Specification
-> **Version:** 1.0 | **Date:** May 2026  
-> **Authority:** This document is the canonical reference for all UI, visual design, and front-end implementation across every page, dashboard, report, and interactive element in the `tipolis-sandbox` repository.  
-> **Usage rule:** Before writing any HTML, CSS, or component code, the implementing agent (Codex, Claude, or any AI) **must** read this file first and derive all visual decisions from it.
+# TIPOLIS UI SPEC (Canonical)
+
+> **Reference visual source (must match):** `general/index.html` and published preview at `https://rafaleandrog.github.io/tipolis-sandbox/general/`.
+> 
+> **Mandatory rule for the entire repository:** every interface in this repo must inherit this same visual language automatically by importing both shared stylesheets:
+> 
+> ```html
+> <link rel="stylesheet" href="../assets/css/tipolis-design-system.css" />
+> <link rel="stylesheet" href="../assets/css/style.css" />
+> ```
+> 
+> (Use `./assets/...` only for root-level pages.)
+>
+> **UI contract:** Any new page, card, dashboard, or text section that does not follow these tokens/components is considered out of spec and must be refactored before merge.
 
 ---
 
