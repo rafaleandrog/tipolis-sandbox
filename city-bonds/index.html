@@ -3,155 +3,138 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>City Bonds | Strategic Capital Thesis</title>
+  <title>City Bonds | Strategic Capital Markets Document</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Jost:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../assets/css/tipolis-design-system.css" />
   <link rel="stylesheet" href="../assets/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body{background:#071a30;color:#e8f1ff}
+    .page{max-width:1240px;margin:0 auto;padding:32px 22px 80px}
+    .hero h1{font-size:68px;line-height:.95;margin:6px 0}.hero h1 span{color:#428fff}
+    .label{font:500 11px 'JetBrains Mono',monospace;letter-spacing:4px;text-transform:uppercase;color:#79b2ff}
+    .card{background:#0e2746;border:1px solid #2c4f79;padding:24px;margin-top:18px}
+    .markdown h1,.markdown h2,.markdown h3{color:#fff}.markdown h1{font-size:46px}.markdown h2{margin-top:28px;font-size:28px}.markdown h3{margin-top:20px;font-size:22px}
+    .markdown p,.markdown li{line-height:1.8;color:#d6e6fb}.markdown strong{color:#fff}.markdown em{color:#8cd0ff}
+    .markdown table{width:100%;border-collapse:collapse;margin:16px 0;background:#102f52}
+    .markdown th,.markdown td{padding:10px;border-bottom:1px solid #2c4f79}
+    .markdown th{font:500 11px 'JetBrains Mono',monospace;letter-spacing:2px;text-transform:uppercase;color:#8fc0ef;text-align:left}
+    .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+    .panel{background:#11365f;border:1px solid #356396;padding:14px}
+    .row{display:flex;justify-content:space-between;gap:8px;margin:7px 0}
+    .bar{height:12px;background:#18385c;border:1px solid #355d86;position:relative}.bar>span{display:block;height:100%}
+    .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}.step{background:#12345b;border:1px solid #3f6da0;padding:12px;text-align:center}
+    .feedback input,.feedback textarea{width:100%;padding:12px;background:#0a2038;border:1px solid #3c5f85;color:#fff;margin-top:6px}
+    .feedback textarea{min-height:130px}
+    .btn{margin-top:12px;background:#1f6fe2;border:0;color:#fff;padding:12px 20px;cursor:pointer;font-weight:600}
+    .ok{display:none;color:#2ee588;margin-top:10px}
+    @media(max-width:1000px){.grid,.flow{grid-template-columns:1fr}.hero h1{font-size:48px}}
+  </style>
 </head>
 <body>
-  <main class="container">
-    <header>
-      <h1>City Bonds</h1>
-      <p>Strategic capital thesis for financing International Cities through a scalable distribution channel.</p>
-      <p><a href="../">← Back to root portal</a> · <a href="../general/">Open General proposal</a></p>
-    </header>
-
-    <section class="card">
-      <h2>Executive Thesis</h2>
-      <p>
-        City Bonds solve a distribution bottleneck, not just a funding gap. The core moat is the ability to structure,
-        legalize, and distribute private capital into city-scale infrastructure and real estate with speed, credibility,
-        and repeatability. The financial instrument is important — but the strategic asset is the channel.
-      </p>
-      <p>
-        This page translates the Entrepreneurial Mindset framework into a practical market-entry playbook for launching
-        a new capital product in both greenfield and existing markets.
-      </p>
+  <main class="page">
+    <section class="hero card">
+      <div class="label">Tipolis City Bonds Program</div>
+      <h1>Strategic Capital Markets <span>Document</span></h1>
     </section>
 
     <section class="card">
-      <h2>1) Core Problem: Capital Access at City Scale</h2>
-      <p>
-        International Cities need large pools of capital quickly and at competitive cost. Conventional capital stacks
-        (equity partners, host-government budget, bank debt) are usually slow, expensive, and hard to scale.
-      </p>
-      <ul>
-        <li><strong>Constraint is distribution:</strong> project ambition exists, but investor access is fragmented.</li>
-        <li><strong>Constraint is translation:</strong> host countries often cannot package opportunities in institutional language.</li>
-        <li><strong>Constraint is repetition:</strong> one-off deals do not compound into a durable capital engine.</li>
-      </ul>
+      <div class="label">Interactive Investor Flow by Instrument</div>
+      <div class="flow" id="investorFlow"></div>
     </section>
 
     <section class="card">
-      <h2>2) Blended Finance: Infrastructure + Real Estate as One Portfolio</h2>
-      <p>
-        City Bonds combine two interdependent layers typically financed in isolation:
-      </p>
-      <ul>
-        <li><strong>Infrastructure layer:</strong> long-duration, lower-yield, predictable cash-flow profile.</li>
-        <li><strong>Real estate layer:</strong> faster revaluation, higher return potential, dependent on infrastructure build-out.</li>
-      </ul>
-      <p>
-        The innovation is to connect both layers in one channel. Investors entering via the conservative infrastructure
-        tranche gain priority access to the subsequent real-estate pipeline benefiting from the same funded assets.
-        This closes a classic value-capture gap: capital that funds roads/utilities can also participate in land and
-        development upside unlocked by those assets.
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>3) Tipolis as the Host Country's DCM Engine</h2>
-      <p>
-        In many emerging jurisdictions, the missing capability is not ambition, but execution in debt capital markets.
-        Tipolis can operate as a specialized DCM partner for host countries by delivering:
-      </p>
-      <ul>
-        <li>Investor narrative and institutional-grade materials.</li>
-        <li>Instrument engineering (City Bonds and adjacent structures).</li>
-        <li>Regulatory enablement with local policymakers.</li>
-        <li>Distribution into a curated investor network.</li>
-      </ul>
-      <p>
-        Strategic exchange: host countries support legal frameworks that enable these instruments; Tipolis brings
-        private capital access without relying solely on sovereign debt expansion.
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>4) Expansion Model: From Operator to Capital Platform</h2>
-      <p>
-        The strongest growth path is not to self-fund every new city. It is to become the preferred channel for third-party
-        projects (private cities, SEZs, regional infrastructure platforms) that need this exact capital format.
-      </p>
-      <ul>
-        <li><strong>Own projects:</strong> lower fee profile, track record creation, model validation.</li>
-        <li><strong>Third-party projects:</strong> higher structuring/distribution fees and optional negotiated participation.</li>
-        <li><strong>Platform outcome:</strong> control of access to capital, with increasing strategic relevance over time.</li>
-      </ul>
-    </section>
-
-    <section class="card">
-      <h2>5) Central Insight: Distribution Channel &gt; Asset Ownership</h2>
-      <p>
-        Real estate exists globally. Bitcoin exposure exists globally. Special jurisdictions are being created globally.
-        What is scarce is a trusted integrated channel that combines all three with legal architecture and execution ability.
-      </p>
-      <p>
-        First-mover execution creates a reinforcing edge: credibility lowers cost of capital; cheaper capital attracts better
-        projects; better projects strengthen credibility. Late entrants face the opposite loop.
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>6) The Compounding Flywheel</h2>
-      <p>
-        Successful issuance is not just funding — it is strategic infrastructure for future funding.
-      </p>
-      <ol>
-        <li>Execute issuance and deliver projects.</li>
-        <li>Increase investor trust through paid coupons and operational proof.</li>
-        <li>Reduce time-to-market and funding cost on the next cycle.</li>
-        <li>Attract more and better projects into the channel.</li>
-        <li>Scale fee revenue, deepen reserves, and expand distribution depth.</li>
-      </ol>
-      <p><strong>Result:</strong> each cycle increases capacity for the next one.</p>
-    </section>
-
-    <section class="card">
-      <h2>7) Investor Positioning Narrative</h2>
-      <p>City Bonds are positioned as a combined value proposition, not a single-factor bond:</p>
-      <ul>
-        <li>Fixed USD income profile linked to real city assets.</li>
-        <li>Structured Bitcoin upside participation without requiring direct custody operations by investors.</li>
-        <li>Participation in city-growth dynamics rather than pure passive credit exposure.</li>
-        <li>Tokenization-enabled transferability for potential liquidity before maturity.</li>
-        <li>Priority pipeline access for investors who finance core infrastructure first.</li>
-      </ul>
-      <p>
-        Comparative framing: City Bonds are not equivalent to sovereign bonds, REITs, or yield products alone —
-        they intentionally combine the strongest elements of each category within one integrated city-finance framework.
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>Strategic Lens Summary (Entrepreneurial Mindset)</h2>
+      <div class="label">Interactive STRC Coverage Ratio Visualizer</div>
       <div class="grid">
-        <div>
-          <h3>Execution Lens</h3>
-          <p>Start with one flagship issuance, one host-country legal corridor, and one anchor investor cohort. Prove velocity and reliability fast.</p>
+        <div class="panel">
+          <div class="row"><span>Portfolio Size (USD)</span><strong id="pfVal">1,000,000</strong></div>
+          <input id="portfolio" type="range" min="100000" max="10000000" step="100000" value="1000000" style="width:100%"/>
+          <div class="row"><span>STRC Share (%)</span><strong id="strcPct">35%</strong></div>
+          <input id="strc" type="range" min="0" max="100" step="1" value="35" style="width:100%"/>
+          <div class="row"><span>CB6 Share (%)</span><strong id="cb6Pct">35%</strong></div>
+          <input id="cb6" type="range" min="0" max="100" step="1" value="35" style="width:100%"/>
+          <div class="row"><span>CB10 Share (%)</span><strong id="cb10Pct">20%</strong></div>
+          <input id="cb10" type="range" min="0" max="100" step="1" value="20" style="width:100%"/>
+          <div class="row"><span>CIP Share (%)</span><strong id="cipPct">10%</strong></div>
+          <input id="cip" type="range" min="0" max="100" step="1" value="10" style="width:100%"/>
+          <p style="font-size:12px;color:#b8cce4">Coverage ratio = STRC value ÷ total City Bonds exposure (CB6+CB10+CIP). This module is for visual business analysis and allocation discussions.</p>
         </div>
-        <div>
-          <h3>Monopoly Lens</h3>
-          <p>Build defensibility around distribution relationships, legal architecture, and multi-cycle track record — not around a generic product label.</p>
-        </div>
-        <div>
-          <h3>Durability Lens</h3>
-          <p>Design issuance cadence and governance for 10–20 year credibility compounding, where trust and cost of capital become the true long-term assets.</p>
+        <div class="panel">
+          <div class="row"><span>Total Allocation Check</span><strong id="totalPct">100%</strong></div>
+          <div class="bar"><span id="strcBar" style="width:35%;background:#29db7e"></span></div>
+          <div class="bar" style="margin-top:8px"><span id="cb6Bar" style="width:35%;background:#4c9dff"></span></div>
+          <div class="bar" style="margin-top:8px"><span id="cb10Bar" style="width:20%;background:#ffb347"></span></div>
+          <div class="bar" style="margin-top:8px"><span id="cipBar" style="width:10%;background:#e08bff"></span></div>
+          <hr style="border-color:#2c4f79;margin:16px 0">
+          <div class="row"><span>STRC Value</span><strong id="strcVal"></strong></div>
+          <div class="row"><span>City Bonds Exposure</span><strong id="cbExp"></strong></div>
+          <div class="row"><span>STRC Coverage Ratio</span><strong id="coverage"></strong></div>
+          <div class="row"><span>Status</span><strong id="status"></strong></div>
         </div>
       </div>
     </section>
+
+    <section class="card markdown" id="specContent">
+      <div class="label">Full Spec Content (In Original Order)</div>
+      <p>Loading document...</p>
+    </section>
+
+    <section class="card feedback">
+      <div class="label">Business Analysis Contribution Box</div>
+      <h3>Submit your question or suggestion</h3>
+      <p>Please register your main doubt or business suggestion so the Tipolis team can review and address it in follow-up analysis rounds.</p>
+      <label>Title</label>
+      <input id="title" placeholder="Short title for your question/suggestion" />
+      <label style="display:block;margin-top:10px">Description</label>
+      <textarea id="desc" placeholder="Describe your question/suggestion in detail."></textarea>
+      <button id="submit" class="btn" type="button">Send contribution</button>
+      <div id="ok" class="ok">Your contribution was received successfully. Your question/suggestion will be addressed soon.</div>
+    </section>
   </main>
+
+  <script>
+    const instrumentSteps = [
+      ['Step 1','Investor Subscribes'],
+      ['Step 2','Digital Bank Issues CB'],
+      ['Step 3','Operations Funding'],
+      ['Step 4','Hold BTC'],
+      ['Step 5','Maturity Payout']
+    ];
+    document.getElementById('investorFlow').innerHTML = instrumentSteps.map((s)=>`<div class="step"><strong>${s[0]}</strong><p>${s[1]}</p></div>`).join('');
+
+    function fmt(n){return n.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0});}
+    function update(){
+      const pf=+portfolio.value, s=+strc.value, c6=+cb6.value, c10=+cb10.value, cp=+cip.value;
+      pfVal.textContent = pf.toLocaleString('en-US');
+      strcPct.textContent=s+'%'; cb6Pct.textContent=c6+'%'; cb10Pct.textContent=c10+'%'; cipPct.textContent=cp+'%';
+      totalPct.textContent=(s+c6+c10+cp)+'%';
+      strcBar.style.width=s+'%'; cb6Bar.style.width=c6+'%'; cb10Bar.style.width=c10+'%'; cipBar.style.width=cp+'%';
+      const strcValue=pf*(s/100), cbExposure=pf*((c6+c10+cp)/100), ratio = cbExposure===0 ? Infinity : strcValue/cbExposure;
+      strcVal.textContent=fmt(strcValue); cbExp.textContent=fmt(cbExposure);
+      coverage.textContent = ratio===Infinity ? '∞' : ratio.toFixed(2)+'x';
+      status.textContent = ratio>=1.0 ? 'Strong Coverage' : ratio>=0.5 ? 'Moderate Coverage' : 'Low Coverage';
+      status.style.color = ratio>=1.0 ? '#2ee588' : ratio>=0.5 ? '#ffb347' : '#ff6b6b';
+      totalPct.style.color = (s+c6+c10+cp===100) ? '#2ee588' : '#ff6b6b';
+    }
+    ['portfolio','strc','cb6','cb10','cip'].forEach(id=>document.getElementById(id).addEventListener('input',update));
+    update();
+
+    fetch('./research/tipolis_city_bonds_strategic_document.md')
+      .then(r=>r.text())
+      .then(md=>{
+        const html = marked.parse(md);
+        document.getElementById('specContent').innerHTML = '<div class="label">Full Spec Content (In Original Order)</div>' + html;
+      })
+      .catch(()=>{
+        document.getElementById('specContent').innerHTML = '<p>Unable to load the spec file.</p>';
+      });
+
+    submit.addEventListener('click',()=>{
+      if(!title.value.trim()||!desc.value.trim()){alert('Please fill in both fields before submitting.');return;}
+      ok.style.display='block'; title.value=''; desc.value='';
+    });
+  </script>
 </body>
 </html>
