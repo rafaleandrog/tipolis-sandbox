@@ -3,138 +3,1318 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>City Bonds | Strategic Capital Markets Document</title>
+  <title>City Bonds — Tipolis Capital Markets Program</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Jost:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Jost:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../assets/css/tipolis-design-system.css" />
-  <link rel="stylesheet" href="../assets/css/style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
-    body{background:#071a30;color:#e8f1ff}
-    .page{max-width:1240px;margin:0 auto;padding:32px 22px 80px}
-    .hero h1{font-size:68px;line-height:.95;margin:6px 0}.hero h1 span{color:#428fff}
-    .label{font:500 11px 'JetBrains Mono',monospace;letter-spacing:4px;text-transform:uppercase;color:#79b2ff}
-    .card{background:#0e2746;border:1px solid #2c4f79;padding:24px;margin-top:18px}
-    .markdown h1,.markdown h2,.markdown h3{color:#fff}.markdown h1{font-size:46px}.markdown h2{margin-top:28px;font-size:28px}.markdown h3{margin-top:20px;font-size:22px}
-    .markdown p,.markdown li{line-height:1.8;color:#d6e6fb}.markdown strong{color:#fff}.markdown em{color:#8cd0ff}
-    .markdown table{width:100%;border-collapse:collapse;margin:16px 0;background:#102f52}
-    .markdown th,.markdown td{padding:10px;border-bottom:1px solid #2c4f79}
-    .markdown th{font:500 11px 'JetBrains Mono',monospace;letter-spacing:2px;text-transform:uppercase;color:#8fc0ef;text-align:left}
-    .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
-    .panel{background:#11365f;border:1px solid #356396;padding:14px}
-    .row{display:flex;justify-content:space-between;gap:8px;margin:7px 0}
-    .bar{height:12px;background:#18385c;border:1px solid #355d86;position:relative}.bar>span{display:block;height:100%}
-    .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}.step{background:#12345b;border:1px solid #3f6da0;padding:12px;text-align:center}
-    .feedback input,.feedback textarea{width:100%;padding:12px;background:#0a2038;border:1px solid #3c5f85;color:#fff;margin-top:6px}
-    .feedback textarea{min-height:130px}
-    .btn{margin-top:12px;background:#1f6fe2;border:0;color:#fff;padding:12px 20px;cursor:pointer;font-weight:600}
-    .ok{display:none;color:#2ee588;margin-top:10px}
-    @media(max-width:1000px){.grid,.flow{grid-template-columns:1fr}.hero h1{font-size:48px}}
+    /* Page-local styles — narrow, only when the design system class falls short. */
+    .cb-allocation-bar {
+      display: flex;
+      height: 14px;
+      border-radius: var(--radius-1);
+      overflow: hidden;
+      border: 1px solid var(--color-border-card);
+    }
+    .cb-allocation-bar > span {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: var(--tracking-mono-1);
+      text-transform: uppercase;
+      color: var(--color-navy-900);
+      text-align: center;
+      line-height: 14px;
+    }
+
+    .cb-spv-grid {
+      display: grid;
+      grid-template-columns: 1fr 24px 1fr 24px 1fr;
+      align-items: center;
+      gap: 0;
+      margin: 24px 0;
+    }
+    .cb-spv-arrow {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--accent);
+      text-align: center;
+    }
+    @media (max-width: 768px) {
+      .cb-spv-grid { grid-template-columns: 1fr; }
+      .cb-spv-arrow { transform: rotate(90deg); padding: 8px 0; }
+    }
+
+    .cb-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .cb-options article {
+      background: var(--color-bg-card-mid);
+      border: 1px solid var(--color-border-card);
+      border-top: 2px solid var(--accent);
+      border-radius: var(--radius-2);
+      padding: 18px 18px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .cb-options h4 {
+      font-family: var(--font-display);
+      font-size: 22px;
+      line-height: 1;
+      color: var(--accent);
+    }
+    .cb-options .pro,
+    .cb-options .con { font-size: 11px; line-height: 1.6; padding-left: 14px; position: relative; color: var(--color-text-body); }
+    .cb-options .pro::before { content: '+'; position: absolute; left: 0; color: var(--accent-strategic); font-weight: 700; }
+    .cb-options .con::before { content: '−'; position: absolute; left: 0; color: var(--accent-warning); font-weight: 700; }
+    @media (max-width: 768px) { .cb-options { grid-template-columns: 1fr; } }
+
+    .cb-instrument {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border-card);
+      border-top: 3px solid var(--instrument-accent, var(--accent));
+      border-radius: var(--radius-2);
+      padding: 26px 28px;
+      margin-bottom: 14px;
+    }
+    .cb-instrument__pre {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .cb-instrument h3 {
+      font-family: var(--font-display);
+      font-size: 38px;
+      line-height: 1;
+      color: var(--instrument-accent, var(--accent));
+      margin: 4px 0 6px;
+    }
+    .cb-instrument h3 span { color: var(--color-text-on-dark-2); font-size: 28px; }
+    .cb-instrument__body { display: grid; grid-template-columns: 1.1fr 1fr; gap: 22px; margin-top: 18px; }
+    @media (max-width: 900px) { .cb-instrument__body { grid-template-columns: 1fr; } }
+
+    .cb-mechanics p { font-size: 12px; line-height: 1.75; color: var(--color-text-body); margin-bottom: 10px; }
+    .cb-mechanics p strong { color: var(--color-text-primary); }
+
+    .cb-stat-grid--instrument {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 600px) { .cb-stat-grid--instrument { grid-template-columns: repeat(2, 1fr); } }
+
+    .cb-stat-grid--instrument .t-stat__value { color: var(--instrument-accent, var(--accent)); font-size: 24px; }
+
+    .cb-targets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+    .cb-targets div {
+      background: color-mix(in srgb, var(--instrument-accent, var(--accent)) 6%, transparent);
+      border: 1px solid color-mix(in srgb, var(--instrument-accent, var(--accent)) 22%, transparent);
+      border-radius: var(--radius-1);
+      padding: 10px 12px;
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--color-text-body);
+    }
+    .cb-targets div strong { display: block; font-size: 11px; color: var(--instrument-accent, var(--accent)); font-family: var(--font-mono); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+    @media (max-width: 600px) { .cb-targets { grid-template-columns: 1fr; } }
+
+    .cb-pitch {
+      margin-top: 18px;
+      background: color-mix(in srgb, var(--instrument-accent, var(--accent)) 8%, transparent);
+      border-left: 3px solid var(--instrument-accent, var(--accent));
+      border-radius: var(--radius-1);
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.75;
+      color: var(--color-text-body);
+    }
+    .cb-pitch strong { color: var(--color-text-primary); }
+    .cb-pitch::before {
+      content: 'Investor Pitch';
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--instrument-accent, var(--accent));
+      margin-bottom: 6px;
+    }
+
+    .cb-calc {
+      margin-top: 18px;
+      background: var(--color-bg-card-deep);
+      border: 1px solid color-mix(in srgb, var(--instrument-accent, var(--accent)) 25%, transparent);
+      border-radius: var(--radius-2);
+      padding: 22px;
+    }
+    .cb-calc__title {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--instrument-accent, var(--accent));
+      margin-bottom: 14px;
+    }
+    .cb-calc__inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+    @media (max-width: 600px) { .cb-calc__inputs { grid-template-columns: 1fr; } }
+
+    .cb-calc__output-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 600px) { .cb-calc__output-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .cb-calc__output {
+      background: var(--color-bg-card-mid);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: var(--radius-1);
+      padding: 12px 14px;
+    }
+    .cb-calc__output-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--color-text-secondary);
+      margin-bottom: 4px;
+    }
+    .cb-calc__output-value {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 24px;
+      line-height: 1;
+      color: var(--instrument-accent, var(--accent));
+      margin-bottom: 2px;
+    }
+    .cb-calc__output-sub { font-size: 9px; color: var(--color-text-muted); }
+
+    .cb-pillar-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 900px) { .cb-pillar-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 500px) { .cb-pillar-grid { grid-template-columns: 1fr; } }
+
+    .cb-credit-stack {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      position: relative;
+      margin-top: 12px;
+    }
+    .cb-credit-stack::before {
+      content: ''; position: absolute; top: 20px; left: 0; right: 0;
+      height: 1px; background: var(--color-border-card);
+    }
+    .cb-credit-stack__step { padding-top: 40px; padding-right: 24px; position: relative; }
+    .cb-credit-stack__step::before {
+      content: ''; position: absolute; top: 14px; left: 0;
+      width: 12px; height: 12px; border-radius: 50%; background: var(--accent);
+    }
+    @media (max-width: 768px) { .cb-credit-stack { grid-template-columns: 1fr; } .cb-credit-stack::before { display: none; } }
+
+    .cb-cycle {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+      margin: 24px 0 8px;
+    }
+    .cb-cycle__node {
+      background: var(--color-bg-card-mid);
+      border: 1px solid var(--color-border-card);
+      border-top: 2px solid var(--accent);
+      border-radius: var(--radius-2);
+      padding: 12px 12px 10px;
+      text-align: center;
+      position: relative;
+    }
+    .cb-cycle__num {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 8px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .cb-cycle__name {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 16px;
+      line-height: 1;
+      color: var(--color-text-primary);
+      margin-bottom: 4px;
+    }
+    .cb-cycle__desc { font-size: 10px; line-height: 1.45; color: var(--color-text-body); }
+    @media (max-width: 900px) { .cb-cycle { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 500px) { .cb-cycle { grid-template-columns: repeat(2, 1fr); } }
+
+    .cb-strc-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .cb-strc-tools { grid-template-columns: 1fr; } }
+
+    .cb-portfolio .cb-bar-row { display: grid; grid-template-columns: 80px 1fr 50px; align-items: center; gap: 8px; margin: 6px 0; }
+    .cb-portfolio .cb-bar-row span:first-child { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--color-text-secondary); }
+    .cb-portfolio .cb-bar-row span:last-child { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-primary); text-align: right; }
+    .cb-portfolio .cb-bar { height: 8px; background: rgba(255,255,255,.06); border-radius: var(--radius-1); overflow: hidden; }
+    .cb-portfolio .cb-bar > i { display: block; height: 100%; transition: width 250ms ease; }
+
+    /* Feedback box */
+    .cb-feedback label { display: block; font-family: var(--font-mono); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--color-text-secondary); margin: 12px 0 5px; }
+    .cb-feedback textarea { min-height: 130px; resize: vertical; }
+    .cb-feedback__ok { display: none; margin-top: 12px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--accent-strategic); }
+    .cb-feedback__ok.is-visible { display: block; }
   </style>
 </head>
-<body>
-  <main class="page">
-    <section class="hero card">
-      <div class="label">Tipolis City Bonds Program</div>
-      <h1>Strategic Capital Markets <span>Document</span></h1>
-    </section>
+<body class="page--city-bonds">
 
-    <section class="card">
-      <div class="label">Interactive Investor Flow by Instrument</div>
-      <div class="flow" id="investorFlow"></div>
-    </section>
+  <!-- ───────── NAV ───────── -->
+  <nav class="t-nav" aria-label="Tipolis navigation">
+    <a class="t-nav__brand" href="../">
+      <span>Tipolis</span>
+    </a>
+    <div class="t-nav__items">
+      <a class="t-pill" href="../general/">Overview</a>
+      <a class="t-pill" href="../strc-treasury/">STRC Treasury</a>
+      <a class="t-pill" href="../digital-money/">Digital Money</a>
+      <span class="t-pill is-active" aria-current="page">City Bonds</span>
+    </div>
+  </nav>
 
-    <section class="card">
-      <div class="label">Interactive STRC Coverage Ratio Visualizer</div>
-      <div class="grid">
-        <div class="panel">
-          <div class="row"><span>Portfolio Size (USD)</span><strong id="pfVal">1,000,000</strong></div>
-          <input id="portfolio" type="range" min="100000" max="10000000" step="100000" value="1000000" style="width:100%"/>
-          <div class="row"><span>STRC Share (%)</span><strong id="strcPct">35%</strong></div>
-          <input id="strc" type="range" min="0" max="100" step="1" value="35" style="width:100%"/>
-          <div class="row"><span>CB6 Share (%)</span><strong id="cb6Pct">35%</strong></div>
-          <input id="cb6" type="range" min="0" max="100" step="1" value="35" style="width:100%"/>
-          <div class="row"><span>CB10 Share (%)</span><strong id="cb10Pct">20%</strong></div>
-          <input id="cb10" type="range" min="0" max="100" step="1" value="20" style="width:100%"/>
-          <div class="row"><span>CIP Share (%)</span><strong id="cipPct">10%</strong></div>
-          <input id="cip" type="range" min="0" max="100" step="1" value="10" style="width:100%"/>
-          <p style="font-size:12px;color:#b8cce4">Coverage ratio = STRC value ÷ total City Bonds exposure (CB6+CB10+CIP). This module is for visual business analysis and allocation discussions.</p>
+  <main class="t-main">
+
+    <!-- ───────── HERO ───────── -->
+    <header class="t-hero">
+      <span class="t-hero__overline">Tipolis City Bonds Program · 2026</span>
+      <h1 class="t-hero__title">City Bonds.<br><span>The Capital Markets Engine.</span></h1>
+      <p class="t-hero__lead">A programmatic suite of structured debt and hybrid-equity instruments designed to fund International Cities at speed, at competitive cost, and across decades — with Bitcoin appreciation embedded as asymmetric optionality. Modeled on Strategy's STRF / STRD / STRK architecture, calibrated for the private-jurisdiction asset class.</p>
+    </header>
+
+    <!-- ───────── §1 CONTEXT ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 01</span>
+      <h2 class="t-h2">Capital, At Speed, Across Decades</h2>
+      <p class="t-lead">Tipolis builds International Cities — jurisdictions designed for the 21st century, operating under Special Administrative Region frameworks negotiated with host countries. Each ICT is delivered through an SPV jointly owned by Tipolis and the host government, isolating project finances from both balance sheets.</p>
+
+      <div class="grid-2">
+        <div>
+          <p class="t-body">The financing challenge is straightforward but consequential. International Cities require <strong>large volumes of capital, deployed with speed, at competitive cost, across long horizons</strong>. Real estate, hard infrastructure (ports, roads, energy, water), and urban infrastructure collectively demand a capital stack conventional channels cannot supply efficiently.</p>
+          <p class="t-body">Equity partnerships are slow and expensive to structure. Government budget allocations are insufficient and politically constrained. Commercial bank debt is short-duration and unsuitable for the long investment horizon of city development.</p>
+          <p class="t-body">City Bonds are Tipolis's answer. They are structured debt and equity instruments whose returns are tied to the operational performance of city assets, with embedded structured exposure to Bitcoin appreciation as an asymmetric component. The design draws directly from <strong>Strategy's capital markets innovation model</strong> — a programmatic issuance of structured instruments calibrated to specific investor risk appetites, anchored in a scarce, appreciating asset.</p>
+          <p class="t-body">For Tipolis, that scarce asset is Bitcoin. The operational engine is the International City itself.</p>
         </div>
-        <div class="panel">
-          <div class="row"><span>Total Allocation Check</span><strong id="totalPct">100%</strong></div>
-          <div class="bar"><span id="strcBar" style="width:35%;background:#29db7e"></span></div>
-          <div class="bar" style="margin-top:8px"><span id="cb6Bar" style="width:35%;background:#4c9dff"></span></div>
-          <div class="bar" style="margin-top:8px"><span id="cb10Bar" style="width:20%;background:#ffb347"></span></div>
-          <div class="bar" style="margin-top:8px"><span id="cipBar" style="width:10%;background:#e08bff"></span></div>
-          <hr style="border-color:#2c4f79;margin:16px 0">
-          <div class="row"><span>STRC Value</span><strong id="strcVal"></strong></div>
-          <div class="row"><span>City Bonds Exposure</span><strong id="cbExp"></strong></div>
-          <div class="row"><span>STRC Coverage Ratio</span><strong id="coverage"></strong></div>
-          <div class="row"><span>Status</span><strong id="status"></strong></div>
+        <div>
+          <div class="t-tinted" style="margin-bottom: 14px">
+            <span class="t-tinted__eyebrow">Capital Allocation — Every Issuance</span>
+            <div class="cb-allocation-bar" aria-label="90% Operations, 10% Bitcoin reserve">
+              <span style="width: 90%; background: var(--accent-bonds);">90% Operations</span>
+              <span style="width: 10%; background: var(--accent-digital);">10% BTC</span>
+            </div>
+            <p class="t-body" style="margin-top: 12px">Every single capital raise across CB6-20y, CB10-10y, and CIP follows the same fixed allocation rule. <strong>90% deployed into city assets</strong> at a stabilized 9% cap rate; <strong>10% deployed into Bitcoin on day one</strong>, retained as Tipolis corporate property.</p>
+          </div>
+          <div class="t-callout">
+            <strong>Anchor asset:</strong> Bitcoin. <strong>Operating engine:</strong> the International City. <strong>Distribution model:</strong> programmatic, monthly, multi-instrument.
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="card markdown" id="specContent">
-      <div class="label">Full Spec Content (In Original Order)</div>
-      <p>Loading document...</p>
+    <hr class="t-divider">
+
+    <!-- ───────── §2 REVENUE BOND ANALOGY ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 02</span>
+      <h2 class="t-h2">City Bonds Are Revenue Bonds — With Two Innovations</h2>
+      <p class="t-lead">For regulatory, legal, and investor-communication purposes, City Bonds map most precisely onto <strong>municipal revenue bonds</strong> in the US tradition: fixed-income instruments not backed by sovereign taxing power, but secured by the revenues generated by a specific project or enterprise — toll roads, airports, water utilities, convention centers.</p>
+
+      <p class="t-body">City Bonds adopt this exact structure. The collateral is not Tipolis's corporate balance sheet, nor any sovereign guarantee from the host country. It is the <strong>income-generating capacity of the assets funded by the bond proceeds</strong>: rental income from real estate, concession revenues from infrastructure, service fees from urban systems. The 9% cap rate assumption applied to the operational allocation reflects the projected stabilized yield on these city assets, analogous to a revenue coverage ratio in a traditional municipal indenture.</p>
+
+      <div class="grid-2" style="margin-top: 18px">
+        <article class="t-feature">
+          <span class="t-feature__pre">Innovation 01</span>
+          <div class="t-feature__title">Bitcoin Reserve Component</div>
+          <p class="t-feature__body">10% of every capital raise is allocated at deployment into Bitcoin, purchased on liquid markets and held on Tipolis's balance sheet for the life of the instrument. The reserve appreciates independently of operational performance and — for the CB instruments — its value at maturity is partially distributed to investors as <strong>asymmetric optionality on top of the fixed coupon</strong>.</p>
+        </article>
+        <article class="t-feature">
+          <span class="t-feature__pre">Innovation 02</span>
+          <div class="t-feature__title">Programmatic Issuance Architecture</div>
+          <p class="t-feature__body">Rather than one-off project-specific bonds, Tipolis builds a <strong>recurring capital markets program</strong> — analogous to an At-The-Market equity program applied to debt and hybrid instruments. This reduces transaction costs, builds investor familiarity, and lets the credit profile compound across successive issuances.</p>
+        </article>
+      </div>
     </section>
 
-    <section class="card feedback">
-      <div class="label">Business Analysis Contribution Box</div>
-      <h3>Submit your question or suggestion</h3>
-      <p>Please register your main doubt or business suggestion so the Tipolis team can review and address it in follow-up analysis rounds.</p>
-      <label>Title</label>
-      <input id="title" placeholder="Short title for your question/suggestion" />
-      <label style="display:block;margin-top:10px">Description</label>
-      <textarea id="desc" placeholder="Describe your question/suggestion in detail."></textarea>
-      <button id="submit" class="btn" type="button">Send contribution</button>
-      <div id="ok" class="ok">Your contribution was received successfully. Your question/suggestion will be addressed soon.</div>
+    <hr class="t-divider">
+
+    <!-- ───────── §3 SPV ARCHITECTURE ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 03</span>
+      <h2 class="t-h2">SPV Architecture &amp; Credit Layers</h2>
+      <p class="t-lead">Each International City project is housed in an SPV jointly owned by Tipolis and the host country government. Capital raised through City Bonds flows into the SPV and is deployed per the bond indenture's prescribed allocation. The SPV owns the city assets — land, buildings, infrastructure concessions — and the revenue streams from those assets service the bond obligations.</p>
+
+      <div class="cb-spv-grid">
+        <div class="cb-instrument" style="--instrument-accent: var(--accent-treasury); padding: 18px; text-align: center; min-height: 180px">
+          <span class="t-feature__pre">Sponsors</span>
+          <div class="t-feature__title" style="font-size: 18px">Tipolis<br>+ Host Country</div>
+          <p class="t-feature__body" style="margin-top: 8px">Joint SPV ownership creates structural ring-fencing and political alignment.</p>
+        </div>
+        <div class="cb-spv-arrow">→</div>
+        <div class="cb-instrument" style="--instrument-accent: var(--accent-bonds); padding: 18px; text-align: center; min-height: 180px">
+          <span class="t-feature__pre">Vehicle</span>
+          <div class="t-feature__title" style="font-size: 18px">Project SPV</div>
+          <p class="t-feature__body" style="margin-top: 8px">Owns city assets and concession revenues. Issues bonds (or pledges revenues to corporate-level issuance — see §4.0). Allocates 90% / 10%.</p>
+        </div>
+        <div class="cb-spv-arrow">→</div>
+        <div class="cb-instrument" style="--instrument-accent: var(--accent-strategic); padding: 18px; text-align: center; min-height: 180px">
+          <span class="t-feature__pre">Outflows</span>
+          <div class="t-feature__title" style="font-size: 18px">Investors · Operations · BTC Reserve</div>
+          <p class="t-feature__body" style="margin-top: 8px">Monthly distributions to bondholders; capex for city assets; Bitcoin purchased and retained on Tipolis balance sheet.</p>
+        </div>
+      </div>
+
+      <p class="t-body" style="margin-top: 22px">This structure provides four layers of credit support. The objective is to achieve and progressively improve <strong>investment-grade ratings</strong> from S&amp;P, Moody's, or Fitch on the senior tranche — a central strategic priority of the program.</p>
+
+      <div class="cb-pillar-grid" style="margin-top: 14px">
+        <article class="t-feature">
+          <span class="t-feature__pre">Layer 01</span>
+          <div class="t-feature__title">Real Asset Collateral</div>
+          <p class="t-feature__body">SPV assets constitute real collateral against which senior tranches have direct claims.</p>
+        </article>
+        <article class="t-feature">
+          <span class="t-feature__pre">Layer 02</span>
+          <div class="t-feature__title">Operational Revenue</div>
+          <p class="t-feature__body">City revenues provide the primary debt service coverage at the projected 9% cap rate.</p>
+        </article>
+        <article class="t-feature">
+          <span class="t-feature__pre">Layer 03</span>
+          <div class="t-feature__title">Bitcoin Reserves</div>
+          <p class="t-feature__body">10% of every issuance held on Tipolis balance sheet, expected to appreciate over the bond's life.</p>
+        </article>
+        <article class="t-feature">
+          <span class="t-feature__pre">Layer 04</span>
+          <div class="t-feature__title">Host Country Alignment</div>
+          <p class="t-feature__body">Government co-ownership of the SPV creates implicit political alignment with bondholder outcomes.</p>
+        </article>
+      </div>
     </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── §4 PRODUCT SUITE ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 04</span>
+      <h2 class="t-h2">The Product Suite — Three Instruments</h2>
+      <p class="t-lead">The City Bond suite consists of three instruments, each calibrated to a distinct position in the capital stack and a distinct investor risk-return profile. They are structurally analogous to <strong>Strategy's STRF (senior, high-grade), STRD (subordinated, high-yield), and STRK (equity-like, perpetual preferred)</strong>.</p>
+
+      <div class="t-tinted" style="margin-top: 12px">
+        <span class="t-tinted__eyebrow">Shared Structural Constants</span>
+        <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px;">
+          <li class="t-body" style="padding-left: 16px; position: relative;"><span style="position: absolute; left: 0; color: var(--accent);">▸</span><strong>90/10 capital allocation:</strong> 90% deployed into city assets; 10% deployed into Bitcoin on day one.</li>
+          <li class="t-body" style="padding-left: 16px; position: relative;"><span style="position: absolute; left: 0; color: var(--accent);">▸</span><strong>BTC ownership:</strong> the Bitcoin is 100% Tipolis property from purchase. Tipolis may sell, lend, pledge, or otherwise manage it. Investor commitments (CB only) are settled in USD at maturity, equal to 50% of BTC appreciation on a notional 10% allocation.</li>
+          <li class="t-body" style="padding-left: 16px; position: relative;"><span style="position: absolute; left: 0; color: var(--accent);">▸</span><strong>Cap rate assumption:</strong> 9% per annum on the operational allocation, after a 3-year construction and ramp-up period during which no operational revenue is generated.</li>
+          <li class="t-body" style="padding-left: 16px; position: relative;"><span style="position: absolute; left: 0; color: var(--accent);">▸</span><strong>Ramp period:</strong> Years 1–3 generate zero operational revenue. Monthly distribution obligations to investors begin from month 1, creating a temporary negative carry by design.</li>
+          <li class="t-body" style="padding-left: 16px; position: relative;"><span style="position: absolute; left: 0; color: var(--accent);">▸</span><strong>Payment frequency:</strong> all instruments distribute on a <strong>monthly basis</strong>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── §4.0 ISSUANCE ENTITY ───────── -->
+    <section>
+      <span class="t-ibadge" style="--accent: var(--accent-warning)">
+        <span class="t-ibadge__dot"></span>
+        <span class="t-ibadge__label">Under Active Evaluation</span>
+      </span>
+      <h2 class="t-h2 t-h2--sm">§4.0 — Issuance Entity: A Structural Decision Pending</h2>
+      <p class="t-lead">A critical structural decision remains under active evaluation: the legal entity responsible for issuing each instrument. There are three possible configurations — issuance directly by Tipolis as the corporate parent, issuance by the project-level SPV, or a hybrid framework. <strong>This decision has not been finalized</strong> and will be subject to detailed legal, regulatory, and financial analysis before any issuance proceeds.</p>
+
+      <div class="cb-options">
+        <article>
+          <span class="t-feature__pre">Option A</span>
+          <h4>Tipolis Corporate Issuance</h4>
+          <div class="pro"><strong>Single counterparty consolidation.</strong> One diversified credit to underwrite — broadens the investor universe and reduces due-diligence burden per issuance.</div>
+          <div class="pro"><strong>Compounding credit track record.</strong> Each repaid coupon improves the same credit profile, signaling repayment discipline across all future issuances.</div>
+          <div class="con"><strong>Project liabilities consolidate at the parent.</strong> Underperformance in one ICT may affect Tipolis's overall credit standing and constrain other capital raises.</div>
+          <div class="con"><strong>Stricter multi-jurisdictional regulatory burden.</strong> Corporate-level issuance increases compliance costs, especially for institutional distribution in the US and EU.</div>
+        </article>
+
+        <article>
+          <span class="t-feature__pre">Option B</span>
+          <h4>Project SPV Issuance</h4>
+          <div class="pro"><strong>Structural ring-fencing.</strong> Each city stands on its own merits; difficulty in one ICT does not legally contaminate other projects.</div>
+          <div class="pro"><strong>Clean revenue-bond treatment.</strong> SPV instruments secured by project revenues fit existing institutional mandates (pensions, insurers, sovereign funds).</div>
+          <div class="con"><strong>Cold-start credit risk per SPV.</strong> Standalone credit assessment with no payment history; higher initial yields and smaller volumes until track record is built.</div>
+          <div class="con"><strong>Multiplied operational complexity.</strong> Investor relations, covenant monitoring, regulatory reporting, and servicing must run independently for each SPV.</div>
+        </article>
+
+        <article>
+          <span class="t-feature__pre">Option C</span>
+          <h4>Hybrid Framework</h4>
+          <div class="pro"><strong>Best fit per instrument.</strong> CB6-20y and CB10-10y at the SPV level for revenue-bond treatment; CIP at the corporate level given its perpetual nature.</div>
+          <div class="pro"><strong>Maximum architectural flexibility.</strong> Lets Tipolis adapt the issuance vehicle to investor preferences, jurisdiction, and project maturity over time.</div>
+          <div class="con"><strong>Operationally heaviest setup.</strong> Combines the regulatory and reporting overhead of both Options A and B simultaneously.</div>
+          <div class="con"><strong>Investor messaging complexity.</strong> Requires careful narrative work so the market understands the difference between corporate-level and SPV-level credit.</div>
+        </article>
+      </div>
+
+      <div class="t-callout" style="margin-top: 14px">
+        <strong>No final determination has been made.</strong> The pros and cons above will be evaluated alongside legal counsel, securities advisors, and prospective anchor investors before any issuance proceeds.
+      </div>
+    </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── §4.1 CB6-20y ───────── -->
+    <section class="cb-instrument" style="--instrument-accent: var(--accent-strategic)">
+      <div class="cb-instrument__pre">
+        <span class="t-ibadge" style="--accent: var(--accent-strategic)">
+          <span class="t-ibadge__dot"></span>
+          <span class="t-ibadge__label">High Grade · Senior Secured</span>
+        </span>
+        <span class="t-feature__pre">STRF Equivalent</span>
+      </div>
+      <h3>CB6-20y <span>— Senior Secured · 6% · 20 Years</span></h3>
+
+      <div class="cb-stat-grid--instrument">
+        <div class="t-stat"><span class="t-stat__label">Coupon</span><span class="t-stat__value">6.0%</span><span class="t-stat__sub">Fixed, monthly</span></div>
+        <div class="t-stat"><span class="t-stat__label">Duration</span><span class="t-stat__value">20y</span><span class="t-stat__sub">Macaulay 12.2y</span></div>
+        <div class="t-stat"><span class="t-stat__label">DSCR (stabilized)</span><span class="t-stat__value">1.35×</span><span class="t-stat__sub">$81K rev / $60K obl</span></div>
+        <div class="t-stat"><span class="t-stat__label">Monthly per $1M</span><span class="t-stat__value">$5K</span><span class="t-stat__sub">$60K/year coupon</span></div>
+      </div>
+
+      <div class="cb-instrument__body">
+        <div class="cb-mechanics">
+          <p><strong>Structure.</strong> 20-year fixed-rate senior secured bond paying 6% per annum, distributed monthly. At year 20, the investor receives: (i) the final monthly coupon, (ii) full return of principal, and (iii) a USD cash payment equal to <strong>50% of Bitcoin appreciation</strong> over the 20-year period, applied to a notional 10% allocation of bond face value.</p>
+          <p><strong>Mechanics per $1M invested.</strong> $900K allocated to operational city assets (generating $81K/year once stabilized); $100K deployed into Bitcoin on day one as Tipolis property. Investor receives $5K/month × 240 = $1.2M total coupons + $1M principal + the BTC appreciation cash settlement.</p>
+          <p><strong>Tipolis carry.</strong> Ramp-period deficit of $180K per bond (36 × $5K). From month 37: positive carry of <strong>+$1,750/bond/month</strong> ($21K/year). Over years 4–20, $357K of operational positive carry per bond, before any Bitcoin consideration.</p>
+          <p><strong>Capital deployment.</strong> All ICT projects. Real estate, hard infrastructure (energy, water, roads, ports, railways), urban infrastructure. The 20-year duration aligns particularly well with long-lived hard infrastructure concessions.</p>
+        </div>
+
+        <div>
+          <table class="t-table">
+            <thead>
+              <tr>
+                <th>BTC CAGR</th><th>Coupons (20y)</th><th>50% BTC Gain</th><th>Total Investor Gain</th><th>IRR</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>0% (bear)</td><td>$1,200,000</td><td>$0</td><td>$1,200,000</td><td>6.0%</td></tr>
+              <tr><td>12% (conservative)</td><td>$1,200,000</td><td>$432,300</td><td>$1,632,300</td><td>~7.1%</td></tr>
+              <tr class="is-highlight"><td>29% (base)</td><td>$1,200,000</td><td>$8,092,500</td><td>$9,292,500</td><td>~14.5%</td></tr>
+              <tr><td>40% (bull)</td><td>$1,200,000</td><td>$41,784,000</td><td>$42,984,000</td><td>~22%</td></tr>
+            </tbody>
+          </table>
+          <p class="t-footnote" style="margin-top: 8px">Even at 0% BTC appreciation, the instrument performs as a plain-vanilla senior bond paying 6%. Bitcoin participation is asymmetric optionality embedded in a high-grade credit.</p>
+        </div>
+      </div>
+
+      <div class="cb-targets">
+        <div><strong>Sovereign wealth funds</strong>Long-duration real assets with predictable income and capital preservation. Senior secured satisfies investment policy; 20-year duration matches perpetual capital.</div>
+        <div><strong>Pensions &amp; insurers</strong>Asset-liability management. 1.35× DSCR + real asset backing + monthly distributions match institutional liability structures.</div>
+        <div><strong>Infrastructure funds</strong>Investment-grade mandates require coverage ratio + senior secured + real collateral — all three present.</div>
+        <div><strong>Conservative family offices</strong>Long-duration real assets diversifying away from conventional equity-bond portfolios, with embedded BTC exposure at no additional cost.</div>
+      </div>
+
+      <!-- Calculator: CB6 -->
+      <div class="cb-calc" data-calc="cb6" style="--instrument-accent: var(--accent-strategic)">
+        <div class="cb-calc__title">Interactive Investor IRR Calculator — CB6-20y</div>
+        <div class="cb-calc__inputs">
+          <div>
+            <label class="t-input-label">Investment ($)</label>
+            <input class="t-input" type="number" data-field="amount" value="1000000" min="100000" step="100000">
+          </div>
+          <div>
+            <div class="t-range__row">
+              <span class="t-input-label" style="margin-bottom: 0">BTC CAGR (% / year)</span>
+              <span class="t-range__readout" data-readout="cagr">29%</span>
+            </div>
+            <input class="t-range__input" type="range" data-field="cagr" min="0" max="40" step="0.5" value="29">
+            <div class="t-range__bounds"><span>0%</span><span>← drag</span><span>40%</span></div>
+          </div>
+        </div>
+        <div class="cb-calc__output-grid">
+          <div class="cb-calc__output"><span class="cb-calc__output-label">Total Coupons (20y)</span><span class="cb-calc__output-value" data-out="coupons">—</span><span class="cb-calc__output-sub">$5,000/month × 240</span></div>
+          <div class="cb-calc__output"><span class="cb-calc__output-label">50% BTC Gain (USD)</span><span class="cb-calc__output-value" data-out="btc">—</span><span class="cb-calc__output-sub">10% notional · 20y</span></div>
+          <div class="cb-calc__output"><span class="cb-calc__output-label">Total Receipts</span><span class="cb-calc__output-value" data-out="total">—</span><span class="cb-calc__output-sub">Coupons + BTC + Principal</span></div>
+          <div class="cb-calc__output"><span class="cb-calc__output-label">Investor IRR</span><span class="cb-calc__output-value" data-out="irr">—</span><span class="cb-calc__output-sub">Annualized return</span></div>
+        </div>
+      </div>
+
+      <div class="cb-pitch">You purchase a senior secured instrument backed by city-scale real assets generating <strong>1.35× your annual coupon</strong>, paid monthly. Your 6% income is contractually fixed for 20 years; full principal returns at maturity. Additionally, the USD equivalent of <strong>50% of Bitcoin's 20-year appreciation</strong> is delivered at maturity at no additional cost — with no Bitcoin custody responsibility. Even if Bitcoin does not appreciate at all, you hold a senior bond paying 6% with real-asset backing.</div>
+    </section>
+
+    <!-- ───────── §4.2 CB10-10y ───────── -->
+    <section class="cb-instrument" style="--instrument-accent: var(--accent-digital)">
+      <div class="cb-instrument__pre">
+        <span class="t-ibadge" style="--accent: var(--accent-digital)">
+          <span class="t-ibadge__dot"></span>
+          <span class="t-ibadge__label">High Yield · Subordinated</span>
+        </span>
+        <span class="t-feature__pre">STRD Equivalent</span>
+      </div>
+      <h3>CB10-10y <span>— Subordinated · 10% · 10 Years</span></h3>
+
+      <div class="cb-stat-grid--instrument">
+        <div class="t-stat"><span class="t-stat__label">Coupon</span><span class="t-stat__value">10.0%</span><span class="t-stat__sub">Fixed, monthly</span></div>
+        <div class="t-stat"><span class="t-stat__label">Duration</span><span class="t-stat__value">10y</span><span class="t-stat__sub">Macaulay 7.0y</span></div>
+        <div class="t-stat"><span class="t-stat__label">DSCR (stabilized)</span><span class="t-stat__value">0.81×</span><span class="t-stat__sub">By design — sub</span></div>
+        <div class="t-stat"><span class="t-stat__label">Monthly per $1M</span><span class="t-stat__value">$8.3K</span><span class="t-stat__sub">$100K/year coupon</span></div>
+      </div>
+
+      <div class="cb-instrument__body">
+        <div class="cb-mechanics">
+          <p><strong>Structure.</strong> 10-year subordinated bond paying 10% per annum, monthly. At year 10: final coupon + full principal + USD cash payment equal to 50% of BTC appreciation over the 10-year period on the 10% notional.</p>
+          <p><strong>Mechanics per $1M invested.</strong> $900K to operational assets ($81K/year stabilized); $100K to Bitcoin on day one (Tipolis property). Investor receives $8,333/month × 120 = $1.0M total coupons + $1M principal + BTC settlement.</p>
+          <p><strong>Tipolis carry.</strong> Ramp deficit of $300K per bond. From month 37: <strong>persistent negative carry of −$1,583/bond/month</strong> (−$19K/year). This is by design — managed at the enterprise level by the BTC retained by Tipolis at maturity, by positive carry from CB6-20y issuances, and by other operational revenues. The negative carry is the cost of high-yield capital access.</p>
+          <p><strong>Capital deployment.</strong> All ICT projects. The 10-year term is most naturally suited to real estate and concession-based infrastructure with faster revenue maturation profiles.</p>
+        </div>
+
+        <div>
+          <table class="t-table">
+            <thead>
+              <tr><th>BTC CAGR</th><th>Coupons (10y)</th><th>50% BTC Gain</th><th>Total Investor Gain</th><th>IRR</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>0% (bear)</td><td>$1,000,000</td><td>$0</td><td>$1,000,000</td><td>10.0%</td></tr>
+              <tr><td>12% (conservative)</td><td>$1,000,000</td><td>$105,300</td><td>$1,105,300</td><td>~10.5%</td></tr>
+              <tr class="is-highlight"><td>29% (base)</td><td>$1,000,000</td><td>$587,850</td><td>$1,587,850</td><td>~13.2%</td></tr>
+              <tr><td>40% (bull)</td><td>$1,000,000</td><td>$1,396,250</td><td>$2,396,250</td><td>~16.2%</td></tr>
+            </tbody>
+          </table>
+          <p class="t-footnote" style="margin-top: 8px">At base BTC CAGR, total IRR exceeds 13% — private-equity-level return with monthly cash distributions and a contractual maturity date.</p>
+        </div>
+      </div>
+
+      <div class="cb-targets">
+        <div><strong>High-yield bond funds</strong>10% fixed + defined 10-year maturity + real asset backing — a combination unsecured corporate HY cannot match on collateral quality.</div>
+        <div><strong>Private credit funds</strong>10y fixed maturity, subordinated claim with real-asset collateral, plus a back-end Bitcoin appreciation payment standard private credit lacks.</div>
+        <div><strong>Bitcoin conviction investors</strong>Meaningful exposure to BTC's long-term trajectory without managing custody, while earning 10% in monthly cash distributions.</div>
+        <div><strong>Endowments &amp; foundations</strong>10-year horizons with monthly income for operational budgets + BTC component contributing to long-term capital growth.</div>
+      </div>
+
+      <div class="cb-calc" data-calc="cb10" style="--instrument-accent: var(--accent-digital)">
+        <div class="cb-calc__title">Interactive Investor IRR Calculator — CB10-10y</div>
+        <div class="cb-calc__inputs">
+          <div>
+            <label class="t-input-label">Investment ($)</label>
+            <input class="t-input" type="number" data-field="amount" value="1000000" min="100000" step="100000">
+          </div>
+          <div>
+            <div class="t-range__row">
+              <span class="t-input-label" style="margin-bottom: 0">BTC CAGR (% / year)</span>
+              <span class="t-range__readout" data-readout="cagr">29%</span>
+            </div>
+            <input class="t-range__input" type="range" data-field="cagr" min="0" max="40" step="0.5" value="29">
+            <div class="t-range__bounds"><span>0%</span><span>← drag</span><span>40%</span></div>
+          </div>
+        </div>
+        <div class="cb-calc__output-grid">
+          <div class="cb-calc__output"><span class="cb-calc__output-label">Total Coupons (10y)</span><span class="cb-calc__output-value" data-out="coupons">—</span><span class="cb-calc__output-sub">$8,333/month × 120</span></div>
+          <div class="cb-calc__output"><span class="cb-calc__output-label">50% BTC Gain (USD)</span><span class="cb-calc__output-value" data-out="btc">—</span><span class="cb-calc__output-sub">10% notional · 10y</span></div>
+          <div class="cb-calc__output"><span class="cb-calc__output-label">Total Receipts</span><span class="cb-calc__output-value" data-out="total">—</span><span class="cb-calc__output-sub">Coupons + BTC + Principal</span></div>
+          <div class="cb-calc__output"><span class="cb-calc__output-label">Investor IRR</span><span class="cb-calc__output-value" data-out="irr">—</span><span class="cb-calc__output-sub">Annualized return</span></div>
+        </div>
+      </div>
+
+      <div class="cb-pitch">You receive 10% annually in monthly payments from a real-asset-backed instrument with a fixed 10-year maturity. At year 10, on top of full principal, you receive the USD equivalent of <strong>50% of Bitcoin's appreciation since issuance</strong> — without custody responsibility. At the base case of 29% BTC CAGR, total IRR exceeds 13%. This is private-equity-level return with monthly cash distributions and a contractual maturity date.</div>
+    </section>
+
+    <!-- ───────── §4.3 CIP ───────── -->
+    <section class="cb-instrument" style="--instrument-accent: var(--accent-peer)">
+      <div class="cb-instrument__pre">
+        <span class="t-ibadge" style="--accent: var(--accent-peer)">
+          <span class="t-ibadge__dot"></span>
+          <span class="t-ibadge__label">Equity Hybrid · Perpetual Preferred</span>
+        </span>
+        <span class="t-feature__pre">STRK Equivalent</span>
+      </div>
+      <h3>CIP <span>— City Equity Participation · 4% Floor + Equity Upside</span></h3>
+
+      <div class="cb-stat-grid--instrument">
+        <div class="t-stat"><span class="t-stat__label">Floor</span><span class="t-stat__value">4.0%</span><span class="t-stat__sub">Contractual minimum</span></div>
+        <div class="t-stat"><span class="t-stat__label">Maturity</span><span class="t-stat__value">∞</span><span class="t-stat__sub">Perpetual preferred</span></div>
+        <div class="t-stat"><span class="t-stat__label">DSCR at floor</span><span class="t-stat__value">2.03×</span><span class="t-stat__sub">$81K rev / $40K floor</span></div>
+        <div class="t-stat"><span class="t-stat__label">Floor monthly per $1M</span><span class="t-stat__value">$3.3K</span><span class="t-stat__sub">+ uncapped equity upside</span></div>
+      </div>
+
+      <div class="cb-instrument__body">
+        <div class="cb-mechanics">
+          <p><strong>Structure.</strong> Perpetual preferred equity instrument with a guaranteed minimum 4% per annum distribution as a floor, plus direct participation in the equity results of the real estate project the instrument finances. Distributions paid monthly. <strong>No fixed maturity</strong>, no scheduled return of principal. There is <strong>no BTC upside commitment</strong> to CIP investors — Bitcoin acquired with the 10% allocation is permanently retained by Tipolis.</p>
+          <p><strong>Return structure.</strong> Total monthly distribution = (i) contractual 4% floor + (ii) variable distribution representing direct participation in the project's equity results. The variable component has <strong>no ceiling</strong>.</p>
+          <p><strong>Mechanics per $1M invested.</strong> $900K to real estate operations ($81K/year stabilized); $100K to Bitcoin on day one, permanently retained by Tipolis with no obligation to CIP investors. Investor receives $3,333/month floor regardless of project performance; distributions rise above the floor with operational results.</p>
+          <p><strong>Tipolis carry at floor.</strong> Stabilized: $6,750/month rev − $3,333 floor = <strong>+$3,417/unit/month</strong> ($41K/year) — the most favorable carry of the suite. Ramp deficit: $120K per unit during construction.</p>
+          <p><strong>Capital deployment — real estate only.</strong> Residential and commercial incorporation projects, plus directly associated urban infrastructure. Hard infrastructure (ports, energy, roads, water) is <strong>not</strong> financed through CIP — real estate generates the most direct, measurable performance-linked revenue streams.</p>
+        </div>
+
+        <div>
+          <table class="t-table">
+            <thead>
+              <tr><th>Scenario</th><th>Equity Participation</th><th>Total Annual Return</th><th>Monthly per $1M</th><th>10y Total</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Pessimistic</td><td>+0%</td><td>4.0%</td><td>$3,333</td><td>$400,000</td></tr>
+              <tr class="is-highlight"><td>Base case</td><td>+5%</td><td>9.0%</td><td>$7,500</td><td>$900,000</td></tr>
+              <tr><td>Optimistic</td><td>+12%</td><td>16.0%</td><td>$13,333</td><td>$1,600,000</td></tr>
+            </tbody>
+          </table>
+          <p class="t-footnote" style="margin-top: 8px">IRR assumes secondary market exit at par after 10 years. If the secondary market values CIP above par, IRR exceeds these figures. <strong>No BTC component is reflected in any CIP investor return scenario.</strong></p>
+
+          <div class="t-tinted" style="margin-top: 12px; --accent: var(--accent-warning)">
+            <span class="t-tinted__eyebrow">Open Structural Element</span>
+            <p class="t-body"><strong>Exit mechanism not yet finalized.</strong> The working assumption is secondary-market trading. Whether CIP includes optional issuer redemption, investor put rights after a holding period, or a structured buyback program is an open question, to be resolved before any formal issuance.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="t-tinted" style="margin-top: 14px">
+        <span class="t-tinted__eyebrow">Tipolis BTC Accumulation (per $1M CIP issued)</span>
+        <p class="t-body">The $100K deployed into Bitcoin on day one is <strong>permanently retained on Tipolis's balance sheet</strong> and never returned to CIP investors. At 29% CAGR: ~$1,275,700 after 10 years; ~$16,285,000 after 20 years. Every CIP issuance adds to Tipolis's permanent strategic Bitcoin reserve — this is the mechanism by which the equity hybrid instrument systematically builds Tipolis's balance sheet position.</p>
+      </div>
+
+      <div class="cb-targets">
+        <div><strong>Real estate equity funds</strong>Mirrors direct property equity: monthly distributions tied to operational performance, no fixed maturity, exit through market mechanisms. CIP removes ownership complexity while preserving economic exposure.</div>
+        <div><strong>Strategic co-investors</strong>Organizations aligned with the ICT thesis. Unlimited distribution upside creates genuine alignment with Tipolis's operational team.</div>
+        <div><strong>Local real estate developers</strong>Contractors and development partners already embedded in execution. CIP gives them a financial stake in the long-term equity upside of the developments they help build.</div>
+        <div><strong>Alternative income / yield funds</strong>Perpetual income with no reinvestment risk and open-ended upside above a guaranteed floor. Real-asset backing + floor guarantee tied to a defined operational asset.</div>
+      </div>
+
+      <div class="cb-calc" data-calc="cip" style="--instrument-accent: var(--accent-peer)">
+        <div class="cb-calc__title">Interactive Investor Return Calculator — CIP</div>
+        <div class="cb-calc__inputs">
+          <div>
+            <label class="t-input-label">Investment ($)</label>
+            <input class="t-input" type="number" data-field="amount" value="1000000" min="100000" step="100000">
+          </div>
+          <div>
+            <div class="t-range__row">
+              <span class="t-input-label" style="margin-bottom: 0">Equity participation above floor (%)</span>
+              <span class="t-range__readout" data-readout="participation">+5%</span>
+            </div>
+            <input class="t-range__input" type="range" data-field="participation" min="0" max="15" step="0.5" value="5">
+            <div class="t-range__bounds"><span>+0%</span><span>← drag</span><span>+15%</span></div>
+          </div>
+        </div>
+        <div class="cb-calc__output-grid">
+          <div class="cb-calc__output"><span class="cb-calc__output-label">Total Annual Return</span><span class="cb-calc__output-value" data-out="annual">—</span><span class="cb-calc__output-sub">Floor + participation</span></div>
+          <div class="cb-calc__output"><span class="cb-calc__output-label">Monthly Distribution</span><span class="cb-calc__output-value" data-out="monthly">—</span><span class="cb-calc__output-sub">Per month, per investment</span></div>
+          <div class="cb-calc__output"><span class="cb-calc__output-label">10-Year Distributions</span><span class="cb-calc__output-value" data-out="tenyr">—</span><span class="cb-calc__output-sub">Cumulative cash, 10y</span></div>
+          <div class="cb-calc__output"><span class="cb-calc__output-label">Tipolis BTC at Yr 10</span><span class="cb-calc__output-value" data-out="btc">—</span><span class="cb-calc__output-sub">29% CAGR · permanent</span></div>
+        </div>
+      </div>
+
+      <div class="cb-pitch">You hold permanent capital in a real estate operation with a contractually guaranteed <strong>4% floor</strong> — paid monthly — and direct equity participation in its performance with no ceiling. No maturity date, no reinvestment risk. In the base scenario, $7,500/month per $1M invested. In the optimistic scenario, $13,333/month. Exit through the secondary market at the time and price of your choosing. The floor is contractual. <strong>This is equity in a growing International City with permanent downside protection built in.</strong></div>
+    </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── §5 COMPARATIVE MATRIX ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 05</span>
+      <h2 class="t-h2">Comparative Product Matrix</h2>
+      <p class="t-lead">The three instruments occupy distinct positions in the capital stack, mirror three Strategy instruments, and address three distinct investor segments.</p>
+
+      <div style="overflow-x: auto">
+      <table class="t-table">
+        <thead>
+          <tr>
+            <th>Attribute</th>
+            <th>CB6-20y</th>
+            <th>CB10-10y</th>
+            <th>CIP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Coupon / floor</td><td>6.0% fixed</td><td>10.0% fixed</td><td>4.0% floor, no ceiling</td></tr>
+          <tr><td>Payment frequency</td><td>Monthly</td><td>Monthly</td><td>Monthly</td></tr>
+          <tr><td>Investor IRR — base case</td><td>~14.5%</td><td>~13.2%</td><td>~9.0%</td></tr>
+          <tr><td>BTC upside to investor</td><td>50% of appreciation, USD at maturity</td><td>50% of appreciation, USD at maturity</td><td>None — 100% to Tipolis</td></tr>
+          <tr><td>Principal return</td><td>Yes — year 20</td><td>Yes — year 10</td><td>No — secondary market exit</td></tr>
+          <tr><td>Monthly distribution (per $1M)</td><td>$5,000</td><td>$8,333</td><td>$3,333 floor → $13,333+</td></tr>
+          <tr><td>Tipolis carry (stabilized, per $1M)</td><td>+$1,750/month</td><td>−$1,583/month</td><td>+$3,417/month (at floor)</td></tr>
+          <tr><td>Tipolis BTC ownership</td><td>100% (pays 50% USD at maturity)</td><td>100% (pays 50% USD at maturity)</td><td>100% (no payment to investor)</td></tr>
+          <tr><td>Capital stack priority</td><td>Senior secured</td><td>Subordinated</td><td>Equity / junior</td></tr>
+          <tr><td>DSCR (stabilized)</td><td>1.35×</td><td>0.81×</td><td>2.03×</td></tr>
+          <tr><td>Macaulay duration</td><td>12.2 years</td><td>7.0 years</td><td>Perpetual</td></tr>
+          <tr><td>Project deployment</td><td>All projects</td><td>All projects</td><td>Real estate only</td></tr>
+          <tr class="is-highlight"><td>MSTR analogue</td><td>STRF</td><td>STRD</td><td>STRK</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── §6 OWN INFRASTRUCTURE ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 06</span>
+      <h2 class="t-h2">Why Tipolis Must Build Its Own<br>Financial Infrastructure</h2>
+
+      <h3 class="t-h3" style="margin-top: 22px; font-size: 17px;">6.1 — The Strategic Case for Vertical Integration</h3>
+      <p class="t-body" style="margin-top: 8px">The City Bond suite is a significant inflection point. But the product itself is not the primary strategic asset. The primary strategic asset is the <strong>infrastructure — regulatory, technological, compliance, origination, structuring, distribution</strong> — that issues these products, connects with investors, and manages the ongoing capital markets program.</p>
+      <p class="t-body">Any institution with sufficient legal expertise can create a bond instrument. The product is, in that sense, a commodity. What is not a commodity — and what constitutes a durable competitive advantage — is the distribution channel: relationships with capital allocators, the investor database, the track record of execution, the regulatory licenses, the trust accumulated over successive issuances.</p>
+      <p class="t-body">If City Bonds are distributed and serviced through third-party intermediaries — investment banks, placement agents, compliance providers — Tipolis pays fees at every step. Origination, structuring, distribution commissions, compliance outsourcing, ongoing servicing fees collectively erode every issuance's economics. <strong>More importantly, the investor relationship belongs to the intermediary.</strong></p>
+      <p class="t-body">Building proprietary infrastructure transforms Tipolis from an issuer dependent on intermediaries into a <strong>platform that owns the full capital markets value chain</strong>.</p>
+
+      <h3 class="t-h3" style="margin-top: 22px; font-size: 17px;">6.2 — The Technology Inflection</h3>
+      <p class="t-body" style="margin-top: 8px">Timing is critical and the direction of travel is unambiguous: the cost of building financial infrastructure is <strong>falling dramatically</strong> as AI reduces the labor cost of compliance, legal drafting, investor communications, and regulatory reporting, and as blockchain reduces the settlement, custody, and record-keeping costs of securities issuance to near zero.</p>
+      <p class="t-body">Platforms that required teams of 50 compliance specialists can now run with 10 + AI-augmented workflows. Smart-contract bond servicing on networks like Botanix or Liquid automates monthly distributions, covenant monitoring, and maturity events. AI-powered KYC/AML scales identity verification at fractional cost.</p>
+      <p class="t-body">The window to build this infrastructure proprietary — before it becomes table stakes and the differentiation disappears — is <strong>open now and will begin to narrow</strong>. Tipolis that invests today builds a capability that will be progressively cheaper to operate and progressively harder for competitors to replicate.</p>
+
+      <div class="t-pattern" style="margin-top: 22px">
+        <span class="t-pattern__pre">6.3 — Strategic Principle</span>
+        <span class="t-pattern__star">★ The Operating Doctrine</span>
+        <h3 class="t-pattern__title">The Channel Is the Asset.<br>The Product Is the Commodity.</h3>
+        <p class="t-pattern__body">Any organization with capital and legal expertise can issue a bond. Any organization with access to Bitcoin can create a hybrid instrument. Any city developer can present a project to investors. <strong>What cannot be replicated quickly is a trusted, established, direct relationship</strong> with 500 family offices, 100 credit funds, 50 infrastructure funds, and 20 sovereign wealth funds, accumulated through years of consistent execution and transparent communication.</p>
+        <p class="t-pattern__body" style="margin-top: 10px">The institution that holds those relationships captures the lowest cost of capital, the fastest execution timelines, the most favorable terms, and the ability to raise larger volumes on shorter notice. Each issuance builds the channel; each monthly distribution made on time reinforces it; each delivered project validates the next round. <strong>This is what Strategy has built with STRF, STRD, and STRK — and what Tipolis intends to occupy within the International City asset class.</strong></p>
+      </div>
+    </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── §7 HOST COUNTRY BENEFITS ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 07</span>
+      <h2 class="t-h2">Benefits for the Host Country Government</h2>
+
+      <h3 class="t-h3" style="margin-top: 22px; font-size: 17px;">7.1 — The Proposition</h3>
+      <p class="t-body" style="margin-top: 8px">When a host country enters into a framework agreement with Tipolis, it provides the enabling conditions: the legal framework for the SPV, the regulatory sandbox for the financial instruments, territorial access, and political legitimacy. In exchange, the host country gains access to <strong>infrastructure it could not fund through conventional means</strong>.</p>
+      <p class="t-body">The proposition extends further. The financial and technological infrastructure Tipolis builds — regulatory licenses, investor network, technology stack, Bitcoin treasury management — can be made <strong>available to the host country government for its own financing needs</strong>.</p>
+      <p class="t-body">A host country traditionally accessing capital markets through sovereign debt — which carries the full political and fiscal consequences of public debt — can use the City Bond framework to issue Bitcoin-enhanced instruments for its own infrastructure. The same 90/10 logic applies. The government's infrastructure is financed by private capital at competitive rates; obligations are partially offset by Bitcoin appreciation in favorable scenarios; the balance sheet benefits from 50% Bitcoin retention on behalf of the state.</p>
+
+      <h3 class="t-h3" style="margin-top: 22px; font-size: 17px;">7.2 — Strategic Alignment</h3>
+      <p class="t-body" style="margin-top: 8px">This proposition creates a powerful alignment of interests. The government has a direct financial incentive for the City Bond program's success — not merely as ICT host, but as a <strong>direct user and beneficiary</strong> of the capital markets infrastructure Tipolis has built. A government that has issued its own Bitcoin-enhanced bonds through Tipolis's platform has concrete reasons to maintain the enabling regulatory environment, to protect the SPV legal framework, and to support the program's growth.</p>
+      <p class="t-body">Tipolis benefits through greater regulatory certainty, stronger political relationships, and the ability to demonstrate to international investors that the program has achieved <strong>governmental endorsement and adoption</strong> — a powerful credit signal.</p>
+
+      <h3 class="t-h3" style="margin-top: 22px; font-size: 17px;">7.3 — Financial Innovation Leadership</h3>
+      <p class="t-body" style="margin-top: 8px">A host country issuing Bitcoin-enhanced revenue bonds through Tipolis's platform becomes a <strong>first mover in a new asset class</strong>. The consequences are tangible: international financial press, regulatory innovator positioning, demonstration effect that draws institutional capital and talent. El Salvador's Bitcoin legal-tender adoption, the UAE's and Singapore's early digital asset frameworks — all captured significant institutional attention and first-mover advantages that continue to compound.</p>
+    </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── §8 CREDIT RATING ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 08</span>
+      <h2 class="t-h2">Credit Rating Improvement Strategy</h2>
+      <p class="t-lead">The central financial objective of the program — beyond raising capital — is the <strong>progressive improvement of the credit rating</strong> assigned to Tipolis's instruments. Higher ratings mean lower cost of capital, larger investor universe, greater issuance volumes, better terms. Every basis point of WACC improvement translates directly into operational leverage for ICT development. The strategy operates on four dimensions:</p>
+
+      <div class="cb-credit-stack">
+        <div class="cb-credit-stack__step">
+          <span class="t-timeline__period">Dimension 01</span>
+          <h4 class="t-timeline__title">Track Record Construction</h4>
+          <p class="t-body">Each successful monthly distribution, each project delivery, each bond maturity where principal and BTC payments arrive as promised. Rating agencies weight demonstrated repayment history heavily. Payment discipline is the program's first priority in early issuances.</p>
+        </div>
+        <div class="cb-credit-stack__step">
+          <span class="t-timeline__period">Dimension 02</span>
+          <h4 class="t-timeline__title">Bitcoin Reserve Quality</h4>
+          <p class="t-body">As Tipolis's retained Bitcoin grows in value, balance sheet asset quality improves — a straightforward credit positive. Rating agencies that have begun incorporating digital assets into analytical frameworks (as for Strategy) reward this collateral improvement.</p>
+        </div>
+        <div class="cb-credit-stack__step">
+          <span class="t-timeline__period">Dimension 03</span>
+          <h4 class="t-timeline__title">Operational Diversification</h4>
+          <p class="t-body">A portfolio of ICTs across host countries reduces concentration risk — a primary concern for any agency analyzing city-level revenue bonds. Multi-city programs distribute risk and stabilize aggregate cash flow.</p>
+        </div>
+        <div class="cb-credit-stack__step">
+          <span class="t-timeline__period">Dimension 04</span>
+          <h4 class="t-timeline__title">Structural Improvement</h4>
+          <p class="t-body">As the program matures, additional credit enhancement: 6–12 month liquidity reserve funds, performance covenants triggering investor protections, third-party liquidity guarantees for the senior tranche, host-country first-loss co-investment.</p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── §9 VIRTUOUS CYCLE ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 09</span>
+      <h2 class="t-h2">The Virtuous Cycle —<br>Capital as a Compounding Asset</h2>
+      <p class="t-lead">The most important long-term dynamic of the program is the compounding relationship between <strong>capital access</strong> and <strong>operational execution</strong>. They are not independent variables — they reinforce each other in a cycle that, once established, becomes self-accelerating.</p>
+
+      <div class="cb-cycle" aria-label="Virtuous cycle, six steps">
+        <div class="cb-cycle__node">
+          <span class="cb-cycle__num">01</span>
+          <span class="cb-cycle__name">Capital Access</span>
+          <p class="cb-cycle__desc">Greater capital access enables larger and faster deployment.</p>
+        </div>
+        <div class="cb-cycle__node">
+          <span class="cb-cycle__num">02</span>
+          <span class="cb-cycle__name">Faster Build</span>
+          <p class="cb-cycle__desc">Faster construction shortens ramp-period carry deficit.</p>
+        </div>
+        <div class="cb-cycle__node">
+          <span class="cb-cycle__num">03</span>
+          <span class="cb-cycle__name">Stronger Cash Flow</span>
+          <p class="cb-cycle__desc">Better operational performance improves coverage ratios.</p>
+        </div>
+        <div class="cb-cycle__node">
+          <span class="cb-cycle__num">04</span>
+          <span class="cb-cycle__name">Better Track Record</span>
+          <p class="cb-cycle__desc">Coverage + payment history improve Tipolis's credit rating.</p>
+        </div>
+        <div class="cb-cycle__node">
+          <span class="cb-cycle__num">05</span>
+          <span class="cb-cycle__name">Lower Cost of Capital</span>
+          <p class="cb-cycle__desc">Better rating reduces cost; lower coupons, longer durations, larger volumes.</p>
+        </div>
+        <div class="cb-cycle__node">
+          <span class="cb-cycle__num">06</span>
+          <span class="cb-cycle__name">Broader Investor Base</span>
+          <p class="cb-cycle__desc">Broader universe enables faster, larger issuances → loops back to 01.</p>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top: 14px">
+        <div class="t-loop" style="--accent: var(--accent-bonds)">
+          <span class="t-loop__title">🔵 Capital → Execution Loop</span>
+          <p class="t-loop__body">This cycle is the same one that drove the compounding capital access advantages of <strong>Brookfield Asset Management, Macquarie Infrastructure, and Prologis</strong> over the past three decades. They built capital market positions not through superior products but through superior track records that compounded into superior access, scale, and terms. The City Bond program is designed to establish this same cycle from the first issuance.</p>
+        </div>
+        <div class="t-loop" style="--accent: var(--accent-digital)">
+          <span class="t-loop__title">🟡 Bitcoin Accelerant</span>
+          <p class="t-loop__body">The Bitcoin component is an accelerant. In scenarios where BTC appreciates materially, Tipolis's balance sheet strengthens <strong>ahead of maturity dates</strong>, providing additional visible collateral. A publicly verifiable, appreciating asset on the corporate balance sheet — particularly with on-chain verification becoming standard — creates a transparency advantage conventional infrastructure bonds cannot offer.</p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── §10 SUMMARY ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 10</span>
+      <h2 class="t-h2">Program at a Glance</h2>
+
+      <p class="t-body">The City Bond program represents Tipolis's transition from a city developer that raises capital episodically through conventional channels into a <strong>capital markets platform</strong> that systematically funds International City development through programmatic issuance, proprietary distribution infrastructure, and Bitcoin-enhanced return structures.</p>
+
+      <div class="t-pattern" style="margin-top: 18px">
+        <span class="t-pattern__pre">Three Instruments · Three Investor Segments · One Engine</span>
+        <h3 class="t-pattern__title">Three Calibrated Products. One Compounding Channel.</h3>
+        <p class="t-pattern__body"><strong>CB6-20y</strong> targets senior capital from sovereign funds, pensions, and insurers — 6% fixed monthly, 20-year duration, senior claim on city assets, BTC appreciation cash settlement at maturity.</p>
+        <p class="t-pattern__body" style="margin-top: 10px"><strong>CB10-10y</strong> targets yield-seeking capital from HY bond funds and private credit — 10% fixed monthly, 10-year duration, subordinated claim enhanced by BTC appreciation cash settlement at maturity.</p>
+        <p class="t-pattern__body" style="margin-top: 10px"><strong>CIP</strong> targets real estate equity capital from property funds, strategic co-investors, and local development partners — perpetual preferred, 4% floor monthly + uncapped equity participation, with 100% of BTC appreciation accumulating on Tipolis's balance sheet.</p>
+      </div>
+
+      <p class="t-body" style="margin-top: 18px">All three are structurally <strong>revenue bonds</strong>: secured by city asset revenues, not by sovereign credit. All three incorporate a Bitcoin reserve component that builds Tipolis's strategic balance sheet. The CB instruments create asymmetric Bitcoin appreciation optionality for investors. All three are designed for programmatic issuance through Tipolis's proprietary capital markets infrastructure, reducing intermediary costs and building a compounding investor distribution channel.</p>
+
+      <p class="t-body">The host country benefits beyond its role as ICT host: the same regulatory, technological, and investor relations capabilities can be applied to its own financing needs, creating a Bitcoin-enhanced sovereign or quasi-sovereign instrument that improves fiscal position while cementing alignment with the program's success.</p>
+
+      <p class="t-body">The ultimate objective is a <strong>self-reinforcing capital markets engine</strong>: each successful monthly payment improves the next issuance, each delivered project strengthens the credit profile, each basis point reduction in cost of capital accelerates operational execution, and each operational success attracts more and better capital.</p>
+    </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── §11 STRC LIQUIDITY CUSHION ───────── -->
+    <section>
+      <span class="t-eyebrow">Strategic Framework 11</span>
+      <h2 class="t-h2">STRC as a Liquidity Cushion —<br>Monthly Coupon Coverage Analysis</h2>
+
+      <h3 class="t-h3" style="margin-top: 18px; font-size: 17px;">11.1 — The Role of STRC on Tipolis's Balance Sheet</h3>
+      <p class="t-body" style="margin-top: 8px">The 3-year construction ramp is the program's primary near-term liquidity risk: no operational revenue is generated by newly deployed capital while monthly distributions to investors are already running. Tipolis addresses this risk by allocating a portion of its <strong>own corporate liquid reserves into STRC</strong> (Strategy's preferred stock, NYSE: STRC).</p>
+      <p class="t-body"><strong>Important separation:</strong> the STRC allocation is an independent corporate treasury decision made with Tipolis's own liquid capital. It does <strong>not</strong> involve any portion of the funds raised through City Bonds. Capital raised by CB6-20y, CB10-10y, or CIP always follows the fixed 90/10 rule — none is redirected into STRC.</p>
+      <p class="t-body">STRC is a USD-denominated preferred equity instrument backed by Strategy's Bitcoin reserves — approximately <strong>$49B in BTC</strong> as of early 2026, providing 4.5× overcollateralization against ~$3.4B in outstanding STRC obligations. STRC trades around $100/share with average daily volume above $80M. It distributes 9–12% per annum in <strong>monthly USD cash payments</strong> — aligning precisely with Tipolis's monthly City Bond obligation structure.</p>
+      <p class="t-body">For Tipolis, holding STRC serves three functions simultaneously: it generates high-yield monthly USD income directly applicable to bond distributions; it is a liquid asset that can be sold rapidly; and it can be pledged as institutional collateral for credit facilities, providing leverage access without forced liquidation.</p>
+
+      <h3 class="t-h3" style="margin-top: 22px; font-size: 17px;">11.2 — Per-$1M Bond STRC Coverage</h3>
+      <p class="t-body" style="margin-top: 8px">The core metric: for a given STRC position, how much of each instrument's annual and monthly obligation does the resulting STRC income cover? All figures per $1,000,000 of City Bond face value outstanding.</p>
+
+      <div class="grid-2" style="margin-top: 14px">
+        <div>
+          <table class="t-table">
+            <thead><tr><th>Instrument</th><th>Annual Obl.</th><th>Monthly Obl.</th></tr></thead>
+            <tbody>
+              <tr><td>CB6-20y (6%)</td><td>$60,000</td><td>$5,000</td></tr>
+              <tr><td>CB10-10y (10%)</td><td>$100,000</td><td>$8,333</td></tr>
+              <tr><td>CIP floor (4%)</td><td>$40,000</td><td>$3,333</td></tr>
+            </tbody>
+          </table>
+          <p class="t-footnote" style="margin-top: 6px">Obligations per $1M bond face value.</p>
+        </div>
+
+        <div>
+          <table class="t-table">
+            <thead><tr><th>Instrument</th><th>STRC req. @ 11%</th><th>Monthly STRC Inc.</th></tr></thead>
+            <tbody>
+              <tr><td>CB6-20y</td><td>$545,455</td><td>$5,000</td></tr>
+              <tr><td>CB10-10y</td><td>$909,091</td><td>$8,333</td></tr>
+              <tr><td>CIP floor</td><td>$363,636</td><td>$3,333</td></tr>
+            </tbody>
+          </table>
+          <p class="t-footnote" style="margin-top: 6px">Base case — 11% STRC yield. Position required for 100% monthly coverage.</p>
+        </div>
+      </div>
+
+      <table class="t-table" style="margin-top: 14px">
+        <thead><tr><th>Instrument</th><th>STRC req. @ 7% (stress)</th><th>Monthly STRC Income</th><th>% of Bond Face</th></tr></thead>
+        <tbody>
+          <tr><td>CB6-20y</td><td>$857,143</td><td>$5,000</td><td>85.7%</td></tr>
+          <tr class="is-highlight"><td>CB10-10y</td><td>$1,428,571</td><td>$8,333</td><td>142.9% — exceeds face</td></tr>
+          <tr><td>CIP floor</td><td>$571,429</td><td>$3,333</td><td>57.1%</td></tr>
+        </tbody>
+      </table>
+
+      <div class="t-callout" style="margin-top: 14px">
+        <strong>Pessimistic case observation:</strong> at 7% STRC yield, full coverage of CB10-10y from STRC alone would require 142.9% of face value — confirming that CB10-10y service during the ramp must rely on a <strong>combination</strong> of STRC income and other corporate cash. CB6-20y and CIP remain feasible at 85.7% and 57.1% of face — within reasonable buffer ranges.
+      </div>
+
+      <h3 class="t-h3" style="margin-top: 22px; font-size: 17px;">11.3 — Investor-Facing Interpretation</h3>
+      <p class="t-body" style="margin-top: 8px">From the perspective of a CB6-20y investor — the most senior and conservative instrument — a Tipolis STRC allocation of <strong>$545,455 per $1M bond outstanding</strong> generates exactly $5,000/month in STRC distributions, matching the monthly coupon obligation precisely at base 11% yield. During the 3 years of construction, every monthly payment owed to the investor can be funded exclusively from Tipolis's STRC distributions — without operational cash, asset sales, or leverage.</p>
+      <p class="t-body">Even in the stress scenario of 7% STRC yield, a position equal to ~86% of CB6-20y face value still covers 100% of the monthly coupon. <strong>The senior tranche's monthly obligations are effectively insulated from ramp-period cash flow risk under all realistic scenarios.</strong></p>
+      <p class="t-body">For CB10-10y, the higher monthly coupon means full STRC coverage requires positions approaching or exceeding face value in adverse scenarios. CB10-10y's negative carry is managed at the enterprise portfolio level — supplemented by CB6-20y positive carry and general corporate reserves — rather than fully hedged by STRC alone.</p>
+      <p class="t-body">For CIP, the low floor distribution makes STRC coverage highly capital-efficient: $363,636 (36.4% of face) at 11% exactly matches the CIP floor monthly. Even at 7%, $571,429 fully covers it. <strong>CIP is the most resilient instrument from a ramp-period liquidity perspective.</strong></p>
+      <p class="t-body">The strategic insight: STRC on Tipolis's corporate balance sheet is <strong>not a speculative position or a yield-enhancement trade</strong>. It is a structural monthly liquidity mechanism funded by Tipolis's own capital, entirely separate from bond proceeds, that directly addresses the most predictable risk in the program: the gap between capital raise and operational revenue. Because STRC pays monthly and City Bonds pay monthly, the cash-flow matching is exact and automatic.</p>
+
+      <!-- ───── Two interactive STRC tools side-by-side ───── -->
+      <div class="cb-strc-tools" style="margin-top: 22px">
+
+        <!-- Tool 1: STRC Coverage Required — spec-aligned -->
+        <div class="cb-calc" data-calc="strc" style="--instrument-accent: var(--accent-bonds)">
+          <div class="cb-calc__title">STRC Coverage Required — per $1M of bond</div>
+          <div class="cb-calc__inputs">
+            <div>
+              <label class="t-input-label">Instrument</label>
+              <select class="t-input" data-field="instrument">
+                <option value="cb6">CB6-20y · 6% coupon</option>
+                <option value="cb10">CB10-10y · 10% coupon</option>
+                <option value="cip">CIP · 4% floor</option>
+              </select>
+            </div>
+            <div>
+              <div class="t-range__row">
+                <span class="t-input-label" style="margin-bottom: 0">STRC yield (% / year)</span>
+                <span class="t-range__readout" data-readout="yield">11%</span>
+              </div>
+              <input class="t-range__input" type="range" data-field="yield" min="5" max="13" step="0.1" value="11">
+              <div class="t-range__bounds"><span>5%</span><span>← drag</span><span>13%</span></div>
+            </div>
+          </div>
+          <div class="cb-calc__output-grid">
+            <div class="cb-calc__output"><span class="cb-calc__output-label">Monthly Obl.</span><span class="cb-calc__output-value" data-out="monthlyObl">—</span><span class="cb-calc__output-sub">Per $1M bond</span></div>
+            <div class="cb-calc__output"><span class="cb-calc__output-label">STRC Required</span><span class="cb-calc__output-value" data-out="strcReq">—</span><span class="cb-calc__output-sub">Position size needed</span></div>
+            <div class="cb-calc__output"><span class="cb-calc__output-label">% of Bond Face</span><span class="cb-calc__output-value" data-out="pctFace">—</span><span class="cb-calc__output-sub">Capital efficiency</span></div>
+            <div class="cb-calc__output"><span class="cb-calc__output-label">Coverage Status</span><span class="cb-calc__output-value" data-out="status" style="font-size: 18px">—</span><span class="cb-calc__output-sub">Feasibility ranking</span></div>
+          </div>
+        </div>
+
+        <!-- Tool 2: Portfolio Allocation Explorer (kept from existing) -->
+        <div class="cb-calc cb-portfolio" data-calc="portfolio" style="--instrument-accent: var(--accent-bonds)">
+          <div class="cb-calc__title">Portfolio Allocation Explorer · STRC vs City Bonds</div>
+          <p class="t-footnote" style="margin-bottom: 14px">Beyond the spec — a complementary view of how a hypothetical Tipolis treasury portfolio would allocate across STRC, CB6, CB10, and CIP, and what coverage ratio results.</p>
+          <div class="cb-calc__inputs">
+            <div>
+              <label class="t-input-label">Portfolio size (USD)</label>
+              <input class="t-input" type="number" data-field="portfolio" value="1000000" min="100000" step="100000">
+            </div>
+            <div>
+              <div class="t-range__row">
+                <span class="t-input-label" style="margin-bottom: 0">STRC share (%)</span>
+                <span class="t-range__readout" data-readout="strc">35%</span>
+              </div>
+              <input class="t-range__input" type="range" data-field="strc" min="0" max="100" step="1" value="35">
+            </div>
+          </div>
+
+          <div class="cb-bar-row">
+            <span>STRC</span>
+            <div class="cb-bar"><i data-bar="strc" style="width: 35%; background: var(--accent-strategic);"></i></div>
+            <span data-pct="strc">35%</span>
+          </div>
+          <div class="cb-bar-row">
+            <span>CB6-20y</span>
+            <div class="cb-bar"><i data-bar="cb6" style="width: 35%; background: var(--accent-bonds);"></i></div>
+            <span data-pct="cb6">35%</span>
+          </div>
+          <div class="cb-bar-row">
+            <span>CB10-10y</span>
+            <div class="cb-bar"><i data-bar="cb10" style="width: 20%; background: var(--accent-digital);"></i></div>
+            <span data-pct="cb10">20%</span>
+          </div>
+          <div class="cb-bar-row">
+            <span>CIP</span>
+            <div class="cb-bar"><i data-bar="cip" style="width: 10%; background: var(--accent-peer);"></i></div>
+            <span data-pct="cip">10%</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px">
+            <div>
+              <label class="t-input-label" style="margin-top: 0">CB6 share (%)</label>
+              <input class="t-input" type="number" data-field="cb6" value="35" min="0" max="100">
+            </div>
+            <div>
+              <label class="t-input-label" style="margin-top: 0">CB10 share (%)</label>
+              <input class="t-input" type="number" data-field="cb10" value="20" min="0" max="100">
+            </div>
+            <div>
+              <label class="t-input-label" style="margin-top: 0">CIP share (%)</label>
+              <input class="t-input" type="number" data-field="cip" value="10" min="0" max="100">
+            </div>
+            <div>
+              <label class="t-input-label" style="margin-top: 0">Total check</label>
+              <span class="t-input" style="display: block" data-out="total">100%</span>
+            </div>
+          </div>
+
+          <div class="cb-calc__output-grid" style="margin-top: 12px; grid-template-columns: 1fr 1fr">
+            <div class="cb-calc__output"><span class="cb-calc__output-label">STRC value</span><span class="cb-calc__output-value" data-out="strcVal">—</span></div>
+            <div class="cb-calc__output"><span class="cb-calc__output-label">CB exposure</span><span class="cb-calc__output-value" data-out="cbExp">—</span></div>
+            <div class="cb-calc__output"><span class="cb-calc__output-label">Coverage Ratio</span><span class="cb-calc__output-value" data-out="ratio">—</span></div>
+            <div class="cb-calc__output"><span class="cb-calc__output-label">Coverage Status</span><span class="cb-calc__output-value" data-out="status" style="font-size: 18px">—</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr class="t-divider">
+
+    <!-- ───────── FEEDBACK BOX ───────── -->
+    <section class="cb-feedback">
+      <span class="t-eyebrow">Business Analysis Contribution</span>
+      <h2 class="t-h2 t-h2--sm">Submit a Question or Suggestion</h2>
+      <p class="t-lead">Register your main doubt or business suggestion so the Tipolis team can review and address it in follow-up analysis rounds. Substantive contributions will be incorporated into the next iteration of this document.</p>
+
+      <div class="t-tinted">
+        <label for="cb-fb-title">Title</label>
+        <input id="cb-fb-title" class="t-input" type="text" placeholder="Short title for your question or suggestion">
+
+        <label for="cb-fb-desc">Description</label>
+        <textarea id="cb-fb-desc" class="t-input" placeholder="Describe your question or suggestion in detail."></textarea>
+
+        <button id="cb-fb-submit" class="t-btn-primary" type="button" style="margin-top: 14px">Send contribution</button>
+        <div id="cb-fb-ok" class="cb-feedback__ok">✓ Contribution received — your input will be addressed soon</div>
+      </div>
+    </section>
+
+    <footer style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--color-divider); display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap;">
+      <small class="t-footnote">Tipolis · City Bonds Program · 2026 — Strategic capital markets document.</small>
+      <small class="t-footnote">Source: <code style="font-family: var(--font-mono); color: var(--accent);">research/tipolis_city_bonds_strategic_document.md</code></small>
+    </footer>
+
   </main>
 
-  <script>
-    const instrumentSteps = [
-      ['Step 1','Investor Subscribes'],
-      ['Step 2','Digital Bank Issues CB'],
-      ['Step 3','Operations Funding'],
-      ['Step 4','Hold BTC'],
-      ['Step 5','Maturity Payout']
-    ];
-    document.getElementById('investorFlow').innerHTML = instrumentSteps.map((s)=>`<div class="step"><strong>${s[0]}</strong><p>${s[1]}</p></div>`).join('');
+<script>
+(() => {
+  const fmt = (n) => {
+    if (!isFinite(n)) return '∞';
+    if (Math.abs(n) >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+    if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+    if (Math.abs(n) >= 1e3) return '$' + Math.round(n / 1e3).toLocaleString() + 'K';
+    return '$' + Math.round(n).toLocaleString();
+  };
+  const pct = (n) => (n >= 0 ? '+' : '') + n.toFixed(1) + '%';
 
-    function fmt(n){return n.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0});}
-    function update(){
-      const pf=+portfolio.value, s=+strc.value, c6=+cb6.value, c10=+cb10.value, cp=+cip.value;
-      pfVal.textContent = pf.toLocaleString('en-US');
-      strcPct.textContent=s+'%'; cb6Pct.textContent=c6+'%'; cb10Pct.textContent=c10+'%'; cipPct.textContent=cp+'%';
-      totalPct.textContent=(s+c6+c10+cp)+'%';
-      strcBar.style.width=s+'%'; cb6Bar.style.width=c6+'%'; cb10Bar.style.width=c10+'%'; cipBar.style.width=cp+'%';
-      const strcValue=pf*(s/100), cbExposure=pf*((c6+c10+cp)/100), ratio = cbExposure===0 ? Infinity : strcValue/cbExposure;
-      strcVal.textContent=fmt(strcValue); cbExp.textContent=fmt(cbExposure);
-      coverage.textContent = ratio===Infinity ? '∞' : ratio.toFixed(2)+'x';
-      status.textContent = ratio>=1.0 ? 'Strong Coverage' : ratio>=0.5 ? 'Moderate Coverage' : 'Low Coverage';
-      status.style.color = ratio>=1.0 ? '#2ee588' : ratio>=0.5 ? '#ffb347' : '#ff6b6b';
-      totalPct.style.color = (s+c6+c10+cp===100) ? '#2ee588' : '#ff6b6b';
+  // Newton-Raphson IRR for monthly coupons + final lump sum.
+  // cashflows: array indexed by month (0 = month 1). Initial outflow not in array.
+  function irrMonthly(initial, monthlyCoupon, months, finalLumpSum, guess = 0.005) {
+    let r = guess;
+    for (let i = 0; i < 60; i++) {
+      let npv = -initial;
+      let dnpv = 0;
+      for (let m = 1; m <= months; m++) {
+        const cf = (m === months) ? (monthlyCoupon + finalLumpSum) : monthlyCoupon;
+        const f = Math.pow(1 + r, m);
+        npv += cf / f;
+        dnpv += -m * cf / (f * (1 + r));
+      }
+      if (Math.abs(dnpv) < 1e-12) break;
+      const nr = r - npv / dnpv;
+      if (Math.abs(nr - r) < 1e-9) { r = nr; break; }
+      r = nr;
     }
-    ['portfolio','strc','cb6','cb10','cip'].forEach(id=>document.getElementById(id).addEventListener('input',update));
+    return Math.pow(1 + r, 12) - 1;  // annualized
+  }
+
+  // ── CB6-20y / CB10-10y calculator ─────────────────────────────
+  function bindCBCalc(node, opts) {
+    const amountIn = node.querySelector('[data-field="amount"]');
+    const cagrIn = node.querySelector('[data-field="cagr"]');
+    const readoutCagr = node.querySelector('[data-readout="cagr"]');
+    const outCoupons = node.querySelector('[data-out="coupons"]');
+    const outBtc = node.querySelector('[data-out="btc"]');
+    const outTotal = node.querySelector('[data-out="total"]');
+    const outIrr = node.querySelector('[data-out="irr"]');
+
+    function update() {
+      const amount = +amountIn.value || 0;
+      const cagr = +cagrIn.value || 0;
+      readoutCagr.textContent = cagr.toFixed(1) + '%';
+
+      const couponMonthly = amount * opts.couponRate / 12;
+      const totalCoupons = couponMonthly * opts.months;
+      const btcNotional = amount * 0.10;
+      const btcFinal = btcNotional * Math.pow(1 + cagr / 100, opts.years);
+      const btcPayment = (btcFinal - btcNotional) * 0.50;
+      const total = totalCoupons + btcPayment + amount;
+      const irr = irrMonthly(amount, couponMonthly, opts.months, btcPayment + amount);
+
+      outCoupons.textContent = fmt(totalCoupons);
+      outBtc.textContent = fmt(btcPayment);
+      outTotal.textContent = fmt(total);
+      outIrr.textContent = (irr * 100).toFixed(1) + '%';
+    }
+    [amountIn, cagrIn].forEach(el => el.addEventListener('input', update));
     update();
+  }
 
-    fetch('./research/tipolis_city_bonds_strategic_document.md')
-      .then(r=>r.text())
-      .then(md=>{
-        const html = marked.parse(md);
-        document.getElementById('specContent').innerHTML = '<div class="label">Full Spec Content (In Original Order)</div>' + html;
-      })
-      .catch(()=>{
-        document.getElementById('specContent').innerHTML = '<p>Unable to load the spec file.</p>';
-      });
+  document.querySelectorAll('[data-calc="cb6"]').forEach(n => bindCBCalc(n, { couponRate: 0.06, years: 20, months: 240 }));
+  document.querySelectorAll('[data-calc="cb10"]').forEach(n => bindCBCalc(n, { couponRate: 0.10, years: 10, months: 120 }));
 
-    submit.addEventListener('click',()=>{
-      if(!title.value.trim()||!desc.value.trim()){alert('Please fill in both fields before submitting.');return;}
-      ok.style.display='block'; title.value=''; desc.value='';
+  // ── CIP calculator ─────────────────────────────
+  document.querySelectorAll('[data-calc="cip"]').forEach(node => {
+    const amountIn = node.querySelector('[data-field="amount"]');
+    const partIn = node.querySelector('[data-field="participation"]');
+    const readoutPart = node.querySelector('[data-readout="participation"]');
+    const outAnnual = node.querySelector('[data-out="annual"]');
+    const outMonthly = node.querySelector('[data-out="monthly"]');
+    const outTenyr = node.querySelector('[data-out="tenyr"]');
+    const outBtc = node.querySelector('[data-out="btc"]');
+
+    function update() {
+      const amount = +amountIn.value || 0;
+      const part = +partIn.value || 0;
+      readoutPart.textContent = '+' + part.toFixed(1) + '%';
+
+      const annualRate = 0.04 + part / 100;
+      const annual = amount * annualRate;
+      const monthly = annual / 12;
+      const tenyr = annual * 10;
+      const btcNotional = amount * 0.10;
+      const btcAt10 = btcNotional * Math.pow(1.29, 10); // 29% CAGR
+
+      outAnnual.textContent = (annualRate * 100).toFixed(1) + '%';
+      outMonthly.textContent = fmt(monthly);
+      outTenyr.textContent = fmt(tenyr);
+      outBtc.textContent = fmt(btcAt10);
+    }
+    [amountIn, partIn].forEach(el => el.addEventListener('input', update));
+    update();
+  });
+
+  // ── STRC Coverage Required calculator ─────────────────────────
+  document.querySelectorAll('[data-calc="strc"]').forEach(node => {
+    const instrIn = node.querySelector('[data-field="instrument"]');
+    const yieldIn = node.querySelector('[data-field="yield"]');
+    const readoutYield = node.querySelector('[data-readout="yield"]');
+    const outMonthly = node.querySelector('[data-out="monthlyObl"]');
+    const outReq = node.querySelector('[data-out="strcReq"]');
+    const outPct = node.querySelector('[data-out="pctFace"]');
+    const outStatus = node.querySelector('[data-out="status"]');
+
+    const obligations = {
+      cb6: { annual: 60000, monthly: 5000, label: 'CB6-20y' },
+      cb10: { annual: 100000, monthly: 8333, label: 'CB10-10y' },
+      cip: { annual: 40000, monthly: 3333, label: 'CIP floor' }
+    };
+
+    function update() {
+      const inst = obligations[instrIn.value];
+      const y = +yieldIn.value || 11;
+      readoutYield.textContent = y.toFixed(1) + '%';
+
+      const required = inst.annual / (y / 100);
+      const pctFace = required / 1000000 * 100;
+
+      outMonthly.textContent = fmt(inst.monthly);
+      outReq.textContent = fmt(required);
+      outPct.textContent = pctFace.toFixed(1) + '%';
+
+      let status, color;
+      if (pctFace <= 60)       { status = 'EFFICIENT'; color = 'var(--accent-strategic)'; }
+      else if (pctFace <= 100) { status = 'FEASIBLE';  color = 'var(--accent-digital)'; }
+      else                     { status = 'EXCEEDS FACE'; color = 'var(--accent-warning)'; }
+      outStatus.textContent = status;
+      outStatus.style.color = color;
+    }
+    [instrIn, yieldIn].forEach(el => el.addEventListener('input', update));
+    update();
+  });
+
+  // ── Portfolio Allocation Explorer ─────────────────────────────
+  document.querySelectorAll('[data-calc="portfolio"]').forEach(node => {
+    const portfolioIn = node.querySelector('[data-field="portfolio"]');
+    const strcRange = node.querySelector('[data-field="strc"]');
+    const strcReadout = node.querySelector('[data-readout="strc"]');
+    const cb6In = node.querySelector('[data-field="cb6"]');
+    const cb10In = node.querySelector('[data-field="cb10"]');
+    const cipIn = node.querySelector('[data-field="cip"]');
+
+    const bars = {
+      strc: node.querySelector('[data-bar="strc"]'),
+      cb6: node.querySelector('[data-bar="cb6"]'),
+      cb10: node.querySelector('[data-bar="cb10"]'),
+      cip: node.querySelector('[data-bar="cip"]'),
+    };
+    const pctLabels = {
+      strc: node.querySelector('[data-pct="strc"]'),
+      cb6: node.querySelector('[data-pct="cb6"]'),
+      cb10: node.querySelector('[data-pct="cb10"]'),
+      cip: node.querySelector('[data-pct="cip"]'),
+    };
+
+    const outTotal = node.querySelector('[data-out="total"]');
+    const outStrcVal = node.querySelector('[data-out="strcVal"]');
+    const outCbExp = node.querySelector('[data-out="cbExp"]');
+    const outRatio = node.querySelector('[data-out="ratio"]');
+    const outStatus = node.querySelector('[data-out="status"]');
+
+    function update() {
+      const portfolio = +portfolioIn.value || 0;
+      const s = +strcRange.value || 0;
+      const c6 = +cb6In.value || 0;
+      const c10 = +cb10In.value || 0;
+      const cp = +cipIn.value || 0;
+      const total = s + c6 + c10 + cp;
+
+      strcReadout.textContent = s + '%';
+      bars.strc.style.width = s + '%';
+      bars.cb6.style.width = c6 + '%';
+      bars.cb10.style.width = c10 + '%';
+      bars.cip.style.width = cp + '%';
+      pctLabels.strc.textContent = s + '%';
+      pctLabels.cb6.textContent = c6 + '%';
+      pctLabels.cb10.textContent = c10 + '%';
+      pctLabels.cip.textContent = cp + '%';
+
+      outTotal.textContent = total + '%';
+      outTotal.style.color = (total === 100) ? 'var(--accent-strategic)' : 'var(--accent-warning)';
+
+      const strcValue = portfolio * (s / 100);
+      const cbExposure = portfolio * ((c6 + c10 + cp) / 100);
+      const ratio = cbExposure === 0 ? Infinity : strcValue / cbExposure;
+
+      outStrcVal.textContent = fmt(strcValue);
+      outCbExp.textContent = fmt(cbExposure);
+      outRatio.textContent = ratio === Infinity ? '∞' : ratio.toFixed(2) + '×';
+
+      let status, color;
+      if (ratio >= 1.0) { status = 'STRONG'; color = 'var(--accent-strategic)'; }
+      else if (ratio >= 0.5) { status = 'MODERATE'; color = 'var(--accent-digital)'; }
+      else { status = 'LOW'; color = 'var(--accent-warning)'; }
+      outStatus.textContent = status;
+      outStatus.style.color = color;
+    }
+    [portfolioIn, strcRange, cb6In, cb10In, cipIn].forEach(el => el.addEventListener('input', update));
+    update();
+  });
+
+  // ── Feedback box ─────────────────────────────
+  const fbSubmit = document.getElementById('cb-fb-submit');
+  const fbOk = document.getElementById('cb-fb-ok');
+  const fbTitle = document.getElementById('cb-fb-title');
+  const fbDesc = document.getElementById('cb-fb-desc');
+  if (fbSubmit) {
+    fbSubmit.addEventListener('click', () => {
+      if (!fbTitle.value.trim() || !fbDesc.value.trim()) {
+        alert('Please fill in both fields before submitting.');
+        return;
+      }
+      fbOk.classList.add('is-visible');
+      fbTitle.value = '';
+      fbDesc.value = '';
+      setTimeout(() => fbOk.classList.remove('is-visible'), 6000);
     });
-  </script>
+  }
+})();
+</script>
+
 </body>
 </html>
