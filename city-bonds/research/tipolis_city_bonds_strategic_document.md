@@ -21,19 +21,53 @@ For regulatory, legal, and investor communication purposes, City Bonds are most 
 
 The City Bond adopts exactly this structure. The underlying collateral is not the creditworthiness of Tipolis's corporate balance sheet nor any sovereign guarantee from the host country. It is the income-generating capacity of the assets funded by the bond proceeds: rental income from real estate, concession revenues from infrastructure, service fees from urban systems. A 9% cap rate is used throughout this document as an illustrative working assumption for modeling projected stabilized yield on city assets; it is not a structural commitment and the actual cap rate will be re-modeled on a per-project basis. Each interactive calculator on the corresponding web page exposes the cap rate as an editable input so alternative assumptions can be tested directly.
 
-The key innovations that City Bonds introduce beyond the standard revenue bond model are two:
+### 2.1 Eligible Project Types — What City Bond Proceeds Fund
 
-First, the Bitcoin reserve component. Ten percent of every capital raise is allocated at deployment into Bitcoin, purchased on established liquid markets and held on Tipolis's balance sheet for the life of the instrument. This creates a reserve that appreciates independently of the city's operational performance and whose value at maturity — for the CB instruments — is partially distributed to investors as an asymmetric optionality component layered on top of the fixed coupon structure.
+City Bond proceeds fund three distinct categories of city assets, each with its own revenue maturation profile, risk characteristics, and instrument eligibility:
 
-Second, the programmatic issuance architecture. Rather than one-off project-specific bonds, Tipolis intends to build a recurring capital markets program — analogous to an At-The-Market equity program but applied to debt and hybrid instruments — allowing continuous access to capital markets as project phases require funding. This programmatic approach reduces transaction costs, builds investor familiarity, and allows the credit profile to compound over time as successive issuances demonstrate repayment discipline.
+**🏢 Real Estate Development.** Residential, commercial, and hospitality buildings within the ICT — the income-generating built environment. Revenue accrues through rental yields, sales, and occupancy economics. This is the most direct, measurable performance-linked revenue stream in the program, and it is the exclusive deployment target for CIP.
+
+**🛣️ Urban Infrastructure.** Streets, lighting, public spaces, last-mile sanitation, and utilities that serve the built environment — the connective tissue of the city. Revenue accrues through service fees and concession-style payments. Urban infrastructure is typically bundled with adjacent real estate so those developments can operate.
+
+**⚡ Hard Infrastructure.** Energy grids, water treatment plants, roads, ports, and railways — the long-duration physical backbone of the ICT. Revenue accrues through long-term concession contracts and utility tariffs. The maturation profile is the slowest of the three categories but also the most durable, aligning particularly well with 20-year senior debt.
+
+Different instruments in the suite are eligible for different combinations of these three types — see §5 Comparative Product Matrix for the canonical map.
+
+### 2.2 Key Innovations Beyond the Standard Revenue Bond
+
+The City Bond introduces two innovations on top of the conventional municipal revenue bond model:
+
+**Innovation 01 — Bitcoin Reserve Component.** Ten percent of every capital raise is allocated at deployment into Bitcoin, purchased on established liquid markets and held on Tipolis's balance sheet for the life of the instrument. This creates a reserve that appreciates independently of the city's operational performance and whose value at maturity — for the CB instruments — is partially distributed to investors as an asymmetric optionality component layered on top of the fixed coupon structure.
+
+**Innovation 02 — Programmatic Issuance Architecture.** Rather than one-off project-specific bonds, Tipolis intends to build a recurring capital markets program — analogous to an At-The-Market equity program but applied to debt and hybrid instruments — allowing continuous access to capital markets as project phases require funding. This programmatic approach reduces transaction costs, builds investor familiarity, and allows the credit profile to compound over time as successive issuances demonstrate repayment discipline.
 
 ---
 
 ## 3. SPV Architecture and Credit Structure
 
-Each International City project is housed in an SPV jointly owned by Tipolis and the host country government. Capital raised through City Bonds flows into this SPV and is deployed according to the bond indenture's prescribed allocation. The SPV owns the city assets — land, buildings, infrastructure concessions — and the revenue streams from those assets service the bond obligations.
+### 3.1 Capital Flow — Sponsors, Vehicle, Outflows
 
-This structure provides several layers of credit support. The SPV's assets constitute real collateral against which senior bond tranches have direct claims. The operational revenues of the city provide the primary debt service coverage. Bitcoin reserves held by Tipolis serve as an additional collateral layer whose value is expected to appreciate over the bond's life. And the host country's co-ownership of the SPV creates implicit political alignment — the government has a financial interest in the city's success and thus in the bond's performance.
+Each International City project is housed in an SPV jointly owned by Tipolis and the host country government. The capital flow through this structure has three actors:
+
+**Sponsors — Tipolis + Host Country.** Joint SPV ownership creates structural ring-fencing and political alignment. Tipolis brings the operating expertise and the capital markets program; the host country contributes the jurisdictional framework, the SPV legal structure, and the regulatory enabling conditions.
+
+**Vehicle — Project SPV.** Owns the city assets — land, buildings, infrastructure concessions — and the revenue streams from those assets. Issues the bonds (or pledges revenues to corporate-level issuance — see §4.0). Enforces the fixed 90 / 10 capital allocation on every raise.
+
+**Outflows — Investors, Operations, BTC Reserve.** Monthly distributions flow to bondholders; capex flows into the operational allocation (real estate, urban infrastructure, hard infrastructure); the Bitcoin reserve is purchased on day one and retained on Tipolis's corporate balance sheet.
+
+### 3.2 Four Layers of Credit Support
+
+This structure provides four distinct layers of credit support, each contributing independently to the program's resilience:
+
+**Layer 01 — Real Asset Collateral.** The SPV's assets constitute real collateral against which senior bond tranches have direct claims. The collateral is operational, income-producing, and physically present in the host jurisdiction.
+
+**Layer 02 — Operational Revenue.** The operational revenues of the city provide the primary debt service coverage at the modeled cap rate. Once the ramp period ends, this is the structural cash flow that anchors monthly distributions.
+
+**Layer 03 — Bitcoin Reserves.** 10% of every issuance is held on Tipolis's balance sheet, expected to appreciate over the bond's life. The reserve is independent of project execution risk and provides a parallel collateral layer that compounds over time.
+
+**Layer 04 — Host Country Alignment.** The host country's co-ownership of the SPV creates implicit political alignment — the government has a financial interest in the city's success and thus in the bond's performance.
+
+### 3.3 Natural Improvement in Cost of Capital
 
 As the program builds a payment track record, Bitcoin reserves appreciate, the portfolio of cities diversifies geographically, and structural enhancements accumulate, the natural consequence in any functioning capital market is a progressive improvement in how investors price the senior tranche. The cost of capital tightens, the addressable investor universe widens, and issuance terms strengthen. This is an outcome the program is structurally designed to enable; it is not a target chased through external rating-agency engagement, and any formal credit rating that emerges does so as a market consequence rather than as the program's objective.
 
@@ -47,9 +81,9 @@ All three instruments share the following structural constants:
 
 - **Operational allocation:** 90% of capital raised is deployed into city assets — real estate, hard infrastructure, or urban infrastructure as specified per issuance.
 - **Bitcoin reserve allocation:** 10% of capital raised is deployed into Bitcoin on the date of issuance. This Bitcoin is 100% the property of Tipolis from the moment of purchase. Tipolis may use it as institutional collateral, sell it, lend it, or deploy it in any other strategic capacity it deems appropriate. The commitment to investors in the CB category (CB-20 and CB-10) is not to hold those specific Bitcoin units unchanged — it is to deliver, at maturity, a cash amount equivalent to 50% of the Bitcoin appreciation calculated from the price at issuance to the price at maturity. The method by which Tipolis manages the underlying BTC position in the interim is at its sole discretion.
-- **Illustrative cap rate (working assumption, not a structural commitment):** modeled at 9% per annum on the operational allocation for the purposes of this document. The actual cap rate will be re-modeled on a per-project basis and may sit anywhere between 4% and 16% depending on jurisdiction, asset class, and operating environment. The interactive calculators expose this as an editable input.
-- **Illustrative ramp period (working assumption, not a structural commitment):** modeled at 3 years of construction and operational ramp-up with no revenue generated. Real projects may operate with ramp periods between 2 and 6 years. Monthly distribution obligations to investors begin from month 1 regardless of the chosen ramp, creating a temporary negative carry by design — mirroring any long-duration infrastructure project. The interactive calculators expose ramp years as an editable input.
-- **Illustrative coupon rates:** the 6% coupon for CB-20, the 10% coupon for CB-10, and the 4% floor for CIP are the headline parameters proposed for issuance and are used throughout this document for modeling. The interactive calculators allow each rate to be re-tested within product-specific ranges (CB-20: 4–10%; CB-10: 6–12%; CIP: 3–5%) to support sensitivity analysis and investor dialogue.
+- **Cap rate assumption (working assumption, not a structural commitment):** modeled at 9% per annum on the operational allocation for the purposes of this document. The actual cap rate will be re-modeled on a per-project basis and may sit anywhere between 4% and 16% depending on jurisdiction, asset class, and operating environment. The interactive calculators expose this as an editable input.
+- **Ramp period (working assumption, not a structural commitment):** modeled at 3 years of construction and operational ramp-up with no revenue generated. Real projects may operate with ramp periods between 2 and 6 years. Monthly distribution obligations to investors begin from month 1 regardless of the chosen ramp, creating a temporary negative carry by design — mirroring any long-duration infrastructure project. The interactive calculators expose ramp years as an editable input.
+- **Coupon rates:** the 6% coupon for CB-20, the 10% coupon for CB-10, and the 4% floor for CIP are the headline parameters proposed for issuance and are used throughout this document for modeling. The interactive calculators allow each rate to be re-tested within product-specific ranges (CB-20: 4–10%; CB-10: 6–12%; CIP: 3–5%) to support sensitivity analysis and investor dialogue.
 - **Payment frequency:** All instruments — CB-20, CB-10, and CIP — make distributions to investors on a monthly basis.
 
 ### 4.0 Issuance Entity — Open Question Under Analysis
@@ -85,6 +119,8 @@ This option is also under consideration and may represent the most flexible long
 ### 4.1 CB-20 — City Bond Senior, 6%, 20 Years (STRF Equivalent)
 
 **Classification:** High Grade, Senior Secured
+
+**Parameter note.** This section is modeled with a **6% coupon**, a **9% cap rate**, and a **3-year ramp**. None of these are structural commitments — the interactive calculator on the corresponding web page lets you re-test the instrument with coupons between 4–10%, cap rates between 4–16%, and ramps between 2–6 years. All numeric scenarios and tables below assume the headline parameters.
 
 **Structure:** CB-20 is a 20-year fixed-rate senior secured bond paying a coupon of 6% per annum on the full principal amount. Coupon payments are distributed monthly. At the end of year 20, the investor receives: (i) the final monthly coupon installment; (ii) the full return of principal; and (iii) an amount in USD equivalent to 50% of the appreciation of Bitcoin calculated from the reference BTC price at issuance to the BTC price at maturity, applied to a notional Bitcoin allocation equal to 10% of the bond's face value.
 
@@ -135,6 +171,8 @@ Conservative family offices with a preference for long-duration real assets and 
 
 **Classification:** High Yield, Subordinated
 
+**Parameter note.** This section is modeled with a **10% coupon**, a **9% cap rate**, and a **3-year ramp**. None of these are structural commitments — the interactive calculator on the corresponding web page lets you re-test the instrument with coupons between 6–12%, cap rates between 4–16%, and ramps between 2–6 years. All numeric scenarios and tables below assume the headline parameters.
+
 **Structure:** CB-10 is a 10-year subordinated bond paying a coupon of 10% per annum on the full principal amount. Coupon payments are distributed monthly. At the end of year 10, the investor receives: (i) the final monthly coupon installment; (ii) the full return of principal; and (iii) an amount in USD equivalent to 50% of the appreciation of Bitcoin calculated from the reference BTC price at issuance to the BTC price at maturity, applied to a notional Bitcoin allocation equal to 10% of the bond's face value. As with CB-20, the Bitcoin deployed at issuance is wholly owned and managed by Tipolis. The investor's right is to a cash settlement at maturity, not to any specific Bitcoin units.
 
 **Financial mechanics (per $1,000,000 invested):**
@@ -184,6 +222,8 @@ Endowments and foundations with 10-year investment horizons that seek monthly in
 
 **Classification:** Equity Hybrid, Perpetual Preferred
 
+**Parameter note.** This section is modeled with a **4% floor**, a **9% cap rate**, and a **3-year ramp**. None of these are structural commitments — the interactive calculator on the corresponding web page lets you re-test the instrument with floors between 3–5%, cap rates between 4–16%, and ramps between 2–6 years. Equity participation above the floor is uncapped and project-specific.
+
 **Structure:** CIP (City Equity Participation) is a perpetual preferred equity instrument with a guaranteed minimum annual distribution of 4% per annum as a floor, plus direct participation in the equity results of the real estate project the instrument finances. Distributions are paid monthly. It has no fixed maturity date and does not provide for the return of principal at any predetermined date. There is no BTC upside commitment to CIP investors — the Bitcoin purchased with the 10% allocation of CIP proceeds is 100% the property of Tipolis and accrues entirely to its balance sheet with no sharing or settlement obligation toward CIP investors at any point.
 
 CIP is exclusively deployed into real estate for residential and commercial incorporation projects, plus directly associated urban infrastructure costs (streets, lighting, utilities serving the funded real estate). It does not finance hard infrastructure.
@@ -224,9 +264,13 @@ The issuing entity allocates $900,000 to real estate operations — targeting $8
 
 Note: IRR assumes secondary market exit at par after 10 years, which is one of the exit options under evaluation. If the secondary market values CIP above par due to strong distribution performance, actual IRR exceeds these figures. No BTC component is reflected in any CIP investor return scenario.
 
-**Tipolis Bitcoin accumulation (per $1,000,000 CIP issued):**
+**Why CIP Does Not Pass BTC Appreciation to the Investor — Strategic Rationale**
 
-The $100,000 deployed into Bitcoin on day one is permanently retained on Tipolis's balance sheet and is never returned to or shared with CIP investors under any scenario. It compounds indefinitely as a Tipolis corporate asset. At 29% CAGR, the $100,000 position is worth approximately $1,275,700 after 10 years and approximately $16,285,000 after 20 years. Every CIP issuance adds to Tipolis's permanent Bitcoin reserve — this is the mechanism by which Tipolis systematically builds its strategic balance sheet position through the equity hybrid instrument.
+The $100,000 deployed into Bitcoin on day one is permanently retained on Tipolis's balance sheet and is never returned to or shared with CIP investors under any scenario. **This structure is intentional and serves a strategic risk-management purpose.** CIP is the equity-like, perpetual instrument in the suite — the one with no maturity, no principal return, and the longest exposure to project-level execution risk. By retaining 100% of the BTC reserve from every CIP issuance, Tipolis builds a balance-sheet asset whose value is *uncorrelated with project performance* and that compounds independently of the city's operational results.
+
+That reserve becomes a strategic instrument the company can deploy over time to **reduce the business risk of the program**: it can be pledged as institutional collateral to access credit facilities without selling assets, used as a liquidity buffer during stress periods, sold tactically to fund operational acceleration, or held as a long-duration offset against any underperforming project tranche. The longer the program runs and the more CIPs are issued, the deeper this corporate-level safety net becomes — and the more resilient the entire City Bond architecture is to adverse scenarios.
+
+**Tipolis Bitcoin accumulation (per $1,000,000 CIP issued).** At 29% CAGR, the $100,000 position is worth approximately $1,275,700 after 10 years and approximately $16,285,000 after 20 years. Every CIP issuance permanently expands this reserve. The CIP investor gains operational equity participation in the underlying real estate; Tipolis gains a strategic, programmatic Bitcoin reserve that strengthens the long-term credit profile of every other instrument in the suite. The two upsides are structurally separated by design.
 
 **Capital deployment — real estate focus:**
 
@@ -263,7 +307,7 @@ The three instruments occupy distinct positions in Tipolis's capital structure:
 | Capital stack priority | Senior secured | Subordinated | Equity / junior |
 | DSCR (stabilized) | 1.35× | 0.81× | 2.03× |
 | Macaulay duration | 12.2 years | 7.0 years | Perpetual |
-| Project deployment | All projects | All projects | Real estate only |
+| Project deployment | ⚡ Hard Infrastructure | 🏢 🛣️ ⚡ Real Estate · Urban · Hard | 🏢 🛣️ Real Estate + Urban only |
 | MSTR analogue | STRF | STRD | STRK |
 
 ---
@@ -322,19 +366,19 @@ A host country government that issues Bitcoin-enhanced revenue bonds through Tip
 
 ---
 
-## 8. Credit Rating Improvement Strategy
+## 8. How the Program Naturally Improves Its Cost of Capital
 
-The central financial objective of the City Bond program — beyond raising capital — is the progressive improvement of the credit rating assigned to Tipolis's instruments by international rating agencies. A higher credit rating means a lower cost of capital, a larger investor universe, greater issuance volumes, and better terms. Every basis point of improvement in the weighted average cost of capital across the City Bond suite translates directly into better operational leverage for International City development.
+A central long-term consequence of the program — beyond raising capital today — is a **progressive tightening of the cost of capital** as the market re-prices Tipolis's risk over time. Higher market confidence translates directly into operational leverage for ICT development: lower coupons on new issuances, longer accepted durations, larger volumes raised on shorter notice, and a broader investor universe. Every basis point of WACC improvement across the suite compounds into faster city build-out.
 
-The credit improvement strategy operates on four dimensions:
+This is a **structural outcome of the architecture**, not an external goal pursued through rating-agency engagement. Any formal credit rating that emerges from rating agencies (S&P, Moody's, Fitch, or others) over time is a market consequence of the underlying improvements below, not the target. The program's four-dimension improvement mechanism operates on:
 
-**Track record construction:** Each successful monthly distribution, each project delivery, and each bond maturity where principal and Bitcoin appreciation payments are delivered as promised incrementally improves Tipolis's credit profile. Rating agencies weight demonstrated repayment history heavily. The program must be designed from the outset to prioritize payment discipline above all else in the early issuances.
+**Dimension 01 — Track Record Construction.** Each successful monthly distribution, each project delivery, and each bond maturity where principal and Bitcoin appreciation payments arrive as promised. Capital markets weight demonstrated repayment history heavily, and payment discipline is the program's first priority in early issuances. The cleanest historical record is the cheapest future capital.
 
-**Bitcoin reserve quality:** As the Bitcoin retained by Tipolis grows in value, the asset quality of its balance sheet improves, which is a straightforward credit positive. Rating agencies that have begun to incorporate digital asset reserves into their analytical frameworks — as they are beginning to do for Strategy's instruments — will reward this collateral quality improvement.
+**Dimension 02 — Bitcoin Reserve Quality.** As Tipolis's retained Bitcoin grows in value, the asset quality of its balance sheet improves — visible to any investor or counterparty examining the corporate balance sheet, and increasingly verifiable on-chain. This collateral improvement is observable in real time, without requiring third-party validation.
 
-**Operational diversification:** A portfolio of International Cities across different host countries and geographies reduces concentration risk, which is a primary concern for any rating agency analyzing city-level revenue bonds. A multi-city program distributes those risks, making the aggregate performance more predictable and the monthly cash flow stream more stable.
+**Dimension 03 — Operational Diversification.** A portfolio of International Cities across different host countries and geographies reduces concentration risk, which is a primary concern for any institution analyzing city-level revenue bonds. Multi-city programs distribute project, jurisdictional, and macroeconomic risks, making aggregate performance more predictable and the monthly cash flow stream more stable.
 
-**Structural improvement:** As the program matures, Tipolis can introduce additional credit enhancement mechanisms: reserve funds that hold 6 to 12 months of monthly distribution obligations in liquid assets, performance covenants that trigger investor protections in defined circumstances, third-party liquidity guarantees for the senior tranche, and co-investment by the host country government in a first-loss position that protects senior bondholders.
+**Dimension 04 — Structural Improvement.** As the program matures, Tipolis can introduce additional credit enhancement mechanisms: reserve funds that hold 6 to 12 months of monthly distribution obligations in liquid assets, performance covenants that trigger investor protections in defined circumstances, third-party liquidity guarantees for the senior tranche, and co-investment by the host country government in a first-loss position that protects senior bondholders.
 
 ---
 
@@ -342,11 +386,24 @@ The credit improvement strategy operates on four dimensions:
 
 The most important long-term dynamic of the City Bond program is the compounding relationship between capital access and operational execution. These are not independent variables — they reinforce each other in a cycle that, once established, becomes self-accelerating.
 
-Greater capital access enables larger and faster deployment of operational infrastructure. A city that builds faster reaches stabilized operational revenue sooner, reducing the ramp-period carry deficit and improving the near-term financial profile. Better operational performance generates stronger cash flows to service monthly bond obligations, improving coverage ratios and payment track records. A stronger track record and better coverage ratios improve Tipolis's credit rating. A better credit rating reduces the cost of capital for the next issuance. Lower cost of capital allows issuance at better terms — lower coupons, longer durations, larger volumes — which attracts a broader investor universe. A broader investor universe allows faster capital raises at scale. And faster capital raises at scale enable even larger operational deployments.
+### 9.1 The Six Steps of the Self-Reinforcing Capital Cycle
+
+The cycle moves clockwise through six distinct stages, with step 06 looping directly back into step 01 at a higher level each rotation:
+
+1. **Capital Access.** Greater capital access enables larger and faster deployment of operational infrastructure.
+2. **Faster Build.** A city that builds faster reaches stabilized operational revenue sooner, shortening the ramp-period carry deficit and improving the near-term financial profile.
+3. **Stronger Cash Flow.** Better operational performance generates stronger cash flows to service monthly bond obligations, improving coverage ratios and payment track records.
+4. **Market Re-Pricing.** A stronger track record and better coverage ratios tighten how the market prices the senior tranche; the addressable investor universe widens.
+5. **Lower Cost of Capital.** Tighter market pricing reduces coupons, lengthens accepted durations, and raises issuance volumes on better terms.
+6. **Broader Investor Base.** A broader universe enables faster capital raises at scale — which loops back to step 01 at a higher level, with even larger operational deployments possible.
+
+### 9.2 Historical Parallel — The Compounding Allocator Pattern
 
 This cycle is the same one that has driven the compounding capital access advantages of the best infrastructure and real estate capital allocators over the past three decades. Brookfield Asset Management, Macquarie Infrastructure, and Prologis did not build their capital market positions through superior products — they built them through superior track records that compounded into superior access, which compounded into superior scale, which compounded into superior terms. Tipolis's City Bond program is designed to establish and accelerate this same cycle from the first issuance.
 
-The Bitcoin component is an accelerant to this cycle. In scenarios where Bitcoin appreciates materially, Tipolis's balance sheet strengthens ahead of maturity dates, providing additional visible collateral that rating agencies and investors can observe. A publicly verifiable, appreciating asset on the corporate balance sheet — particularly in an era where on-chain verification is becoming standard — creates a transparency advantage that conventional infrastructure bonds cannot offer.
+### 9.3 Bitcoin as Cycle Accelerant
+
+The Bitcoin component is an accelerant to this cycle. In scenarios where Bitcoin appreciates materially, Tipolis's balance sheet strengthens ahead of maturity dates, providing additional visible collateral that any market observer can verify. A publicly verifiable, appreciating asset on the corporate balance sheet — particularly in an era where on-chain verification is becoming standard — creates a transparency advantage that conventional infrastructure bonds cannot offer.
 
 ---
 
