@@ -2053,20 +2053,69 @@
   });
 
   // ── Feedback box ─────────────────────────────
+  const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzaW13ge8C6XohsAO_3c1ms9F2DT6nuT_uUiJrEHzyajr0DnmdeP1qCFVIsBytWLlV9/exec';
+
   const fbSubmit = document.getElementById('cb-fb-submit');
   const fbOk = document.getElementById('cb-fb-ok');
   const fbTitle = document.getElementById('cb-fb-title');
   const fbDesc = document.getElementById('cb-fb-desc');
+
   if (fbSubmit) {
-    fbSubmit.addEventListener('click', () => {
-      if (!fbTitle.value.trim() || !fbDesc.value.trim()) {
+    fbSubmit.addEventListener('click', async () => {
+      const title = fbTitle.value.trim();
+      const description = fbDesc.value.trim();
+
+      if (!title || !description) {
         alert('Please fill in both fields before submitting.');
         return;
       }
-      fbOk.classList.add('is-visible');
-      fbTitle.value = '';
-      fbDesc.value = '';
-      setTimeout(() => fbOk.classList.remove('is-visible'), 6000);
+
+      fbSubmit.disabled = true;
+      fbSubmit.textContent = 'Sending...';
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      try {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ title, description }),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status + ' — ' + response.statusText);
+        }
+
+        const raw = await response.text();
+        let data;
+        try {
+          data = JSON.parse(raw);
+        } catch (parseError) {
+          throw new Error('Server returned a non-JSON response. The Apps Script may not be deployed or may be returning an error page.');
+        }
+
+        if (!data || data.success !== true) {
+          throw new Error(data && data.message ? data.message : 'Server returned an unsuccessful response.');
+        }
+
+        fbOk.classList.add('is-visible');
+        fbTitle.value = '';
+        fbDesc.value = '';
+
+        setTimeout(() => fbOk.classList.remove('is-visible'), 6000);
+      } catch (error) {
+        console.error('Feedback submission failed:', error);
+        const reason = error && error.name === 'AbortError'
+          ? 'The request timed out after 15 seconds. Please try again.'
+          : (error && error.message ? error.message : 'Please try again.');
+        alert('Unable to send your contribution. ' + reason);
+      } finally {
+        clearTimeout(timeoutId);
+        fbSubmit.disabled = false;
+        fbSubmit.textContent = 'Send contribution';
+      }
     });
   }
 })();
