@@ -2074,12 +2074,21 @@
       fbSubmit.textContent = 'Sending...';
 
       try {
-        await fetch(GOOGLE_SCRIPT_URL, {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
-          mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ title, description })
         });
+
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status + ' — ' + response.statusText);
+        }
+
+        const data = await response.json();
+
+        if (!data || data.success !== true) {
+          throw new Error((data && data.message) || 'Server returned an unsuccessful response.');
+        }
 
         fbOk.classList.add('is-visible');
         fbTitle.value = '';
@@ -2088,7 +2097,7 @@
         setTimeout(() => fbOk.classList.remove('is-visible'), 6000);
       } catch (error) {
         console.error('Feedback submission failed:', error);
-        alert('Unable to send your contribution. Please try again.');
+        alert('Unable to send your contribution. ' + (error && error.message ? error.message : 'Please try again.'));
       } finally {
         fbSubmit.disabled = false;
         fbSubmit.textContent = 'Send contribution';
