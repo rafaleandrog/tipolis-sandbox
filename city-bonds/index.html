@@ -310,7 +310,7 @@
     /* ─── Tipolis Investment Thesis Mind Map ─── */
     .cb-mindmap {
       display: grid;
-      grid-template-columns: 170px 1fr 320px;
+      grid-template-columns: minmax(0, 1fr) 320px;
       gap: 28px;
       margin-top: 28px;
       align-items: start;
@@ -322,51 +322,6 @@
       }
     }
 
-    /* Anchor circle */
-    .cb-mindmap__anchor {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      padding-top: 24px;
-    }
-    @media (max-width: 1024px) { .cb-mindmap__anchor { padding-top: 0; } }
-    .cb-mindmap__anchor-badge {
-      width: 130px;
-      height: 130px;
-      border-radius: 50%;
-      background: linear-gradient(140deg, var(--color-navy-1000) 0%, var(--color-navy-900) 100%);
-      border: 2px solid var(--accent-bonds);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .cb-mindmap__anchor-name {
-      font-family: var(--font-display);
-      font-size: 26px;
-      color: var(--color-text-primary);
-      line-height: 1;
-      letter-spacing: 0.5px;
-    }
-    .cb-mindmap__anchor-symbol {
-      font-family: var(--font-display);
-      font-size: 22px;
-      color: var(--accent-treasury);
-      line-height: 1;
-    }
-    .cb-mindmap__anchor-label {
-      font-family: var(--font-mono);
-      font-size: 9.5px;
-      letter-spacing: 2.5px;
-      text-transform: uppercase;
-      color: var(--color-text-on-dark-fainter);
-      text-align: center;
-      max-width: 140px;
-      line-height: 1.4;
-    }
-
     /* Topic tree */
     .cb-mindmap__tree {
       display: flex;
@@ -375,8 +330,8 @@
     }
     .cb-mindmap__topic {
       display: grid;
-      grid-template-columns: 165px 1fr;
-      gap: 14px;
+      grid-template-columns: 175px 1fr;
+      gap: 18px;
       align-items: start;
       --topic-accent: var(--accent-bonds);
     }
@@ -488,43 +443,77 @@
 
     /* ─── Tipolis City Capital Refinery ─── */
     .cb-refinery {
-      margin-top: 24px;
-      padding: 28px 24px 26px;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--accent-treasury) 6%, transparent) 0%, transparent 60%);
+      margin-top: 26px;
+      padding: 36px 32px 32px;
+      background:
+        radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent-bonds) 8%, transparent) 0%, transparent 55%),
+        linear-gradient(180deg, color-mix(in srgb, var(--accent-treasury) 5%, transparent) 0%, transparent 80%),
+        var(--color-bg-card-mid);
       border: 1px solid var(--color-border-card);
       border-radius: var(--radius-2);
       position: relative;
+      overflow: hidden;
+    }
+    .cb-refinery::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg,
+        var(--accent-treasury) 0%,
+        var(--accent-treasury) 35%,
+        var(--accent-bonds) 50%,
+        var(--accent-strategic) 65%,
+        var(--accent-digital) 80%,
+        var(--accent-peer) 92%,
+        var(--accent-treasury) 100%);
+      opacity: 0.85;
+    }
+    .cb-refinery__eyebrow {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent-treasury);
+      text-align: center;
+      margin: 0 0 6px;
     }
     .cb-refinery__title {
       font-family: var(--font-display);
-      font-size: 28px;
+      font-size: 32px;
       line-height: 1;
-      letter-spacing: 1px;
+      letter-spacing: 1.5px;
       text-align: center;
-      margin: 0 0 26px;
+      margin: 0 0 32px;
       color: var(--color-text-primary);
     }
     .cb-refinery__flow {
       display: grid;
-      grid-template-columns: minmax(170px, 1fr) 50px 180px 50px minmax(0, 2fr);
-      gap: 14px;
-      align-items: center;
+      grid-template-columns: minmax(0, 1.05fr) 64px minmax(0, 0.85fr) 64px minmax(0, 1.4fr);
+      gap: 16px;
+      align-items: stretch;
     }
     @media (max-width: 1080px) {
       .cb-refinery__flow {
         grid-template-columns: 1fr;
-        gap: 20px;
+        gap: 22px;
       }
     }
 
+    .cb-refinery__col {
+      display: flex;
+      flex-direction: column;
+    }
     .cb-refinery__col-label {
       display: block;
       font-family: var(--font-mono);
       font-size: 11px;
-      letter-spacing: 2.5px;
+      letter-spacing: 3px;
       text-transform: uppercase;
       color: var(--accent-treasury);
-      margin-bottom: 2px;
+      margin-bottom: 4px;
+      text-align: center;
     }
     .cb-refinery__col-sub {
       display: block;
@@ -532,150 +521,226 @@
       font-size: 9.5px;
       letter-spacing: 1.5px;
       color: var(--color-text-on-dark-fainter);
-      margin-bottom: 12px;
+      margin-bottom: 16px;
+      text-align: center;
     }
 
+    /* ─── Input stack (left) ─── */
     .cb-refinery__input-stack {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
+      flex: 1;
     }
     .cb-refinery__input {
-      display: flex;
-      gap: 10px;
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 12px;
       align-items: center;
-      padding: 9px 11px;
-      background: color-mix(in srgb, var(--accent-treasury) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--accent-treasury) 30%, transparent);
-      border-left: 3px solid var(--accent-treasury);
+      padding: 12px 14px;
+      background: color-mix(in srgb, var(--accent-treasury) 10%, var(--color-navy-1000));
+      border: 1px solid color-mix(in srgb, var(--accent-treasury) 35%, transparent);
       border-radius: var(--radius-2);
+      transition: transform 200ms ease, border-color 200ms ease;
     }
-    .cb-refinery__input-icon { font-size: 22px; flex-shrink: 0; line-height: 1; }
+    .cb-refinery__input:hover {
+      transform: translateX(2px);
+      border-color: var(--accent-treasury);
+    }
+    .cb-refinery__input-icon {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--accent-treasury) 18%, transparent);
+      border-radius: 8px;
+      color: var(--accent-treasury);
+    }
+    .cb-refinery__input-icon svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .cb-refinery__input-icon--btc {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+    }
     .cb-refinery__input-text {
       display: flex;
       flex-direction: column;
-      font-size: 11px;
-      line-height: 1.45;
-      color: var(--color-text-body);
+      gap: 2px;
     }
-    .cb-refinery__input-text strong {
+    .cb-refinery__input-name {
       font-family: var(--font-mono);
-      font-size: 10.5px;
+      font-size: 11px;
       letter-spacing: 1.5px;
       text-transform: uppercase;
       color: var(--color-text-primary);
-      margin-bottom: 2px;
+      font-weight: 700;
+    }
+    .cb-refinery__input-meta {
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--color-text-on-dark-fainter);
     }
 
-    /* Horizontal pipe with arrow tip */
+    /* ─── Pipe (orange flow indicator) ─── */
     .cb-refinery__pipe {
+      align-self: center;
+      width: 100%;
       height: 5px;
-      background: var(--accent-treasury);
+      background: linear-gradient(90deg, var(--accent-treasury) 0%, color-mix(in srgb, var(--accent-treasury) 60%, transparent) 100%);
+      border-radius: 2px;
       position: relative;
+      box-shadow: 0 0 18px color-mix(in srgb, var(--accent-treasury) 40%, transparent);
     }
     .cb-refinery__pipe::after {
       content: '';
       position: absolute;
-      right: -1px;
+      right: -2px;
       top: 50%;
       width: 0; height: 0;
-      border-left: 13px solid var(--accent-treasury);
-      border-top: 9px solid transparent;
-      border-bottom: 9px solid transparent;
+      border-left: 14px solid var(--accent-treasury);
+      border-top: 10px solid transparent;
+      border-bottom: 10px solid transparent;
       transform: translateY(-50%);
+      filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-treasury) 60%, transparent));
     }
     @media (max-width: 1080px) {
       .cb-refinery__pipe {
-        height: 22px;
+        height: 26px;
         width: 5px;
-        background: var(--accent-treasury);
+        background: linear-gradient(180deg, var(--accent-treasury) 0%, color-mix(in srgb, var(--accent-treasury) 60%, transparent) 100%);
         margin: 0 auto;
       }
       .cb-refinery__pipe::after {
         right: auto; left: 50%;
         top: 100%;
-        border-top: 13px solid var(--accent-treasury);
-        border-left: 9px solid transparent;
-        border-right: 9px solid transparent;
+        border-top: 14px solid var(--accent-treasury);
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
         border-bottom: 0;
         transform: translateX(-50%);
       }
     }
 
+    /* ─── Tipolis building (center) ─── */
     .cb-refinery__building {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      gap: 12px;
+      padding: 18px 8px;
+      background:
+        radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--accent-bonds) 14%, transparent) 0%, transparent 70%),
+        var(--color-bg-card-deep, var(--color-navy-1000));
+      border: 1px solid color-mix(in srgb, var(--accent-bonds) 35%, transparent);
+      border-radius: var(--radius-2);
     }
-    .cb-refinery__building svg { width: 130px; height: auto; }
+    .cb-refinery__building-svg {
+      width: 140px;
+      height: auto;
+      filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent-bonds) 50%, transparent));
+    }
     .cb-refinery__building-name {
       font-family: var(--font-display);
-      font-size: 24px;
+      font-size: 30px;
       line-height: 1;
       color: var(--color-text-primary);
-      margin-top: 2px;
+      letter-spacing: 1px;
+      margin-top: 4px;
     }
-    .cb-refinery__building-sub {
+    .cb-refinery__building-meta {
       font-family: var(--font-mono);
       font-size: 9.5px;
       letter-spacing: 2px;
+      text-transform: uppercase;
       color: var(--accent-bonds);
     }
 
-    .cb-refinery__output-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
+    /* ─── Output products (right) ─── */
+    .cb-refinery__outputs {
+      flex: 1;
     }
-    @media (max-width: 900px) { .cb-refinery__output-row { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 520px) { .cb-refinery__output-row { grid-template-columns: 1fr; } }
-
-    .cb-refinery__output {
-      background: var(--color-bg-card-mid);
+    .cb-refinery__output-card {
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--accent-bonds) 4%, transparent) 0%, transparent 100%),
+        color-mix(in srgb, var(--color-navy-900) 80%, var(--color-navy-1000));
       border: 1px solid var(--color-border-card);
-      border-top: 3px solid var(--output-accent, var(--accent-bonds));
       border-radius: var(--radius-2);
-      padding: 14px 12px 12px;
+      padding: 14px;
+    }
+    .cb-refinery__output-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 540px) { .cb-refinery__output-grid { grid-template-columns: 1fr; } }
+
+    .cb-refinery__product {
+      --product-accent: var(--accent-bonds);
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
+      padding: 22px 18px;
+      background:
+        linear-gradient(150deg, color-mix(in srgb, var(--product-accent) 22%, transparent) 0%, color-mix(in srgb, var(--product-accent) 6%, transparent) 100%);
+      border: 1px solid color-mix(in srgb, var(--product-accent) 45%, transparent);
+      border-radius: var(--radius-2);
+      position: relative;
+      overflow: hidden;
+      transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+      min-height: 130px;
+      justify-content: space-between;
     }
-    .cb-refinery__output--strategic { --output-accent: var(--accent-strategic); }
-    .cb-refinery__output--digital   { --output-accent: var(--accent-digital); }
-    .cb-refinery__output--peer      { --output-accent: var(--accent-peer); }
-    .cb-refinery__output--treasury  { --output-accent: var(--accent-treasury); }
+    .cb-refinery__product:hover {
+      transform: translateY(-2px);
+      border-color: var(--product-accent);
+      box-shadow: 0 8px 24px -12px color-mix(in srgb, var(--product-accent) 55%, transparent);
+    }
+    .cb-refinery__product::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 2px;
+      background: var(--product-accent);
+    }
+    .cb-refinery__product--strategic { --product-accent: var(--accent-strategic); }
+    .cb-refinery__product--digital   { --product-accent: var(--accent-digital); }
+    .cb-refinery__product--peer      { --product-accent: var(--accent-peer); }
+    .cb-refinery__product--treasury  { --product-accent: var(--accent-treasury); }
 
-    .cb-refinery__output-icon { font-size: 22px; line-height: 1; }
-    .cb-refinery__output-name {
-      font-family: var(--font-display);
-      font-size: 24px;
-      line-height: 1;
-      color: var(--output-accent);
+    .cb-refinery__product-icon {
+      width: 28px;
+      height: 28px;
+      color: var(--product-accent);
+      opacity: 0.9;
     }
-    .cb-refinery__output-desc {
+    .cb-refinery__product-icon svg { width: 100%; height: 100%; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .cb-refinery__product-name {
+      font-family: var(--font-display);
+      font-size: 30px;
+      line-height: 0.95;
+      letter-spacing: 1px;
+      color: var(--product-accent);
+    }
+    .cb-refinery__product-tag {
       font-family: var(--font-mono);
       font-size: 9.5px;
-      letter-spacing: 0.6px;
-      line-height: 1.6;
-      color: var(--color-text-on-dark-fainter);
+      letter-spacing: 1.8px;
       text-transform: uppercase;
-    }
-    .cb-refinery__output-desc strong {
-      color: var(--output-accent);
-      font-weight: 700;
+      color: var(--color-text-on-dark-fainter);
     }
 
     .cb-refinery__quote {
-      margin: 28px auto 0;
-      max-width: 720px;
-      padding: 14px 20px;
-      border-top: 1px solid color-mix(in srgb, var(--accent-treasury) 40%, transparent);
-      border-bottom: 1px solid color-mix(in srgb, var(--accent-treasury) 40%, transparent);
+      margin: 32px auto 0;
+      max-width: 760px;
+      padding: 16px 22px;
+      border-top: 1px solid color-mix(in srgb, var(--accent-treasury) 45%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--accent-treasury) 45%, transparent);
       text-align: center;
       font-family: var(--font-mono);
-      font-size: 11.5px;
-      letter-spacing: 1.5px;
+      font-size: 12px;
+      letter-spacing: 2px;
       text-transform: uppercase;
       color: var(--accent-treasury);
     }
@@ -883,7 +948,7 @@
     .cb-flywheel {
       position: relative;
       width: 100%;
-      max-width: 800px;
+      max-width: 900px;
       aspect-ratio: 8 / 7;
       margin: 28px auto 12px;
       color: var(--accent);
@@ -958,13 +1023,13 @@
 
     .cb-flywheel__node {
       position: absolute;
-      width: 240px;
+      width: 210px;
       transform: translate(-50%, -50%);
       background: var(--color-bg-card-mid);
       border: 1px solid var(--color-border-card);
       border-top: 2px solid var(--accent);
       border-radius: var(--radius-2);
-      padding: 12px 14px 11px;
+      padding: 11px 12px 10px;
       text-align: left;
       z-index: 3;
     }
@@ -974,24 +1039,24 @@
       font-size: 9px;
       letter-spacing: 2px;
       color: var(--accent);
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
     .cb-flywheel__node-name {
       display: block;
       font-family: var(--font-display);
-      font-size: 19px;
+      font-size: 17px;
       line-height: 1;
       color: var(--color-text-primary);
-      margin-bottom: 6px;
+      margin-bottom: 5px;
     }
-    .cb-flywheel__node-desc { font-size: 11px; line-height: 1.5; color: var(--color-text-body); }
+    .cb-flywheel__node-desc { font-size: 10.5px; line-height: 1.45; color: var(--color-text-body); }
 
-    .cb-flywheel__node--1 { left: 50%;     top: 8.57%; }
-    .cb-flywheel__node--2 { left: 81.375%; top: 29.29%; }
-    .cb-flywheel__node--3 { left: 81.375%; top: 70.71%; }
-    .cb-flywheel__node--4 { left: 50%;     top: 91.43%; }
-    .cb-flywheel__node--5 { left: 18.625%; top: 70.71%; }
-    .cb-flywheel__node--6 { left: 18.625%; top: 29.29%; }
+    .cb-flywheel__node--1 { left: 50%;   top: 6%; }
+    .cb-flywheel__node--2 { left: 86%;   top: 27%; }
+    .cb-flywheel__node--3 { left: 86%;   top: 73%; }
+    .cb-flywheel__node--4 { left: 50%;   top: 94%; }
+    .cb-flywheel__node--5 { left: 14%;   top: 73%; }
+    .cb-flywheel__node--6 { left: 14%;   top: 27%; }
 
     @media (max-width: 820px) {
       .cb-flywheel {
@@ -1378,15 +1443,6 @@
       <p class="t-lead" style="margin-top: 8px">Six dimensions of the Tipolis investment thesis — industry positioning, business model, moat, KPIs, opportunities, and risks. Click any sub-item to see its detailed explanation in the panel on the right.</p>
 
       <div class="cb-mindmap">
-        <!-- Anchor -->
-        <div class="cb-mindmap__anchor">
-          <div class="cb-mindmap__anchor-badge">
-            <span class="cb-mindmap__anchor-name">Tipolis</span>
-            <span class="cb-mindmap__anchor-symbol">₿</span>
-          </div>
-          <span class="cb-mindmap__anchor-label">Investment Thesis</span>
-        </div>
-
         <!-- Tree -->
         <div class="cb-mindmap__tree">
 
@@ -1471,7 +1527,7 @@
         <span class="t-ibadge__dot"></span>
         <span class="t-ibadge__label">Under Active Evaluation</span>
       </span>
-      <h2 class="t-h2 t-h2--sm">§4.0 — Issuance Entity: A Structural Decision Pending</h2>
+      <h2 class="t-h2 t-h2--sm">Issuance Entity: A Structural Decision Pending</h2>
       <p class="t-lead">A critical structural decision remains under active evaluation: the legal entity responsible for issuing each instrument. There are three possible configurations — issuance directly by Tipolis as the corporate parent, issuance by the project-level SPV, or a hybrid framework. <strong>This decision has not been finalized</strong> and will be subject to detailed legal, regulatory, and financial analysis before any issuance proceeds.</p>
 
       <div class="cb-options">
@@ -1930,7 +1986,7 @@
     <section>
       <span class="t-eyebrow">Strategic Framework 05</span>
       <h2 class="t-h2">Comparative Product Matrix</h2>
-      <p class="t-lead">The three instruments occupy distinct positions in the capital stack, mirror three Strategy instruments, and address three distinct investor segments. <em>All values reflect the proposed coupons (6 / 10 / 4) — the calculators above let you re-test any of these.</em></p>
+      <p class="t-lead">The three instruments occupy distinct positions in the capital stack, mirror three Strategy instruments, and address three distinct investor segments. <em>All values reflect the proposed coupons — the calculators above let you re-test any of these.</em></p>
 
       <div style="overflow-x: auto">
       <table class="t-table cb-matrix">
@@ -1967,29 +2023,48 @@
 
       <!-- City Capital Refinery infographic -->
       <div class="cb-refinery">
+        <span class="cb-refinery__eyebrow">Capital Markets Architecture</span>
         <h3 class="cb-refinery__title">Tipolis is a City Capital Refinery</h3>
 
         <div class="cb-refinery__flow">
           <!-- LEFT: Inputs -->
-          <div class="cb-refinery__inputs">
+          <div class="cb-refinery__col cb-refinery__inputs">
             <span class="cb-refinery__col-label">Inputs</span>
             <span class="cb-refinery__col-sub">Land · Real Estate · Governance · Bitcoin</span>
             <div class="cb-refinery__input-stack">
               <div class="cb-refinery__input">
-                <span class="cb-refinery__input-icon" aria-hidden="true">🏔️</span>
-                <span class="cb-refinery__input-text"><strong>Raw Land</strong>Acquired at pre-development cost</span>
+                <span class="cb-refinery__input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M2 20l6.5-10 4.5 6 3-4 6 8z"/><circle cx="17" cy="6" r="1.5"/></svg>
+                </span>
+                <span class="cb-refinery__input-text">
+                  <span class="cb-refinery__input-name">Raw Land</span>
+                  <span class="cb-refinery__input-meta">Pre-development cost basis</span>
+                </span>
               </div>
               <div class="cb-refinery__input">
-                <span class="cb-refinery__input-icon" aria-hidden="true">🏗️</span>
-                <span class="cb-refinery__input-text"><strong>Real Estate</strong>Income-generating city assets</span>
+                <span class="cb-refinery__input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><rect x="3" y="9" width="7" height="12"/><rect x="14" y="3" width="7" height="18"/><line x1="6" y1="13" x2="7" y2="13"/><line x1="6" y1="17" x2="7" y2="17"/><line x1="17" y1="7" x2="18" y2="7"/><line x1="17" y1="11" x2="18" y2="11"/><line x1="17" y1="15" x2="18" y2="15"/></svg>
+                </span>
+                <span class="cb-refinery__input-text">
+                  <span class="cb-refinery__input-name">Real Estate</span>
+                  <span class="cb-refinery__input-meta">Income-generating city assets</span>
+                </span>
               </div>
               <div class="cb-refinery__input">
-                <span class="cb-refinery__input-icon" aria-hidden="true">⚖️</span>
-                <span class="cb-refinery__input-text"><strong>Governance</strong>Legal &amp; regulatory framework</span>
+                <span class="cb-refinery__input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><line x1="12" y1="3" x2="12" y2="21"/><line x1="6" y1="21" x2="18" y2="21"/><path d="M5 8l-3 6h6z"/><path d="M19 8l-3 6h6z"/><line x1="5" y1="8" x2="19" y2="8"/><circle cx="12" cy="5" r="1.2"/></svg>
+                </span>
+                <span class="cb-refinery__input-text">
+                  <span class="cb-refinery__input-name">Governance</span>
+                  <span class="cb-refinery__input-meta">Legal &amp; regulatory framework</span>
+                </span>
               </div>
               <div class="cb-refinery__input">
-                <span class="cb-refinery__input-icon" aria-hidden="true">₿</span>
-                <span class="cb-refinery__input-text"><strong>Bitcoin</strong>10% of every raise, retained permanently</span>
+                <span class="cb-refinery__input-icon cb-refinery__input-icon--btc" aria-hidden="true">₿</span>
+                <span class="cb-refinery__input-text">
+                  <span class="cb-refinery__input-name">Bitcoin</span>
+                  <span class="cb-refinery__input-meta">10% of every raise, permanently retained</span>
+                </span>
               </div>
             </div>
           </div>
@@ -1998,54 +2073,79 @@
           <div class="cb-refinery__pipe" aria-hidden="true"></div>
 
           <!-- CENTER: Building -->
-          <div class="cb-refinery__building">
-            <svg viewBox="0 0 160 165" aria-hidden="true">
-              <!-- Roof -->
-              <polygon points="80,8 14,50 146,50" fill="var(--accent-bonds)"/>
+          <div class="cb-refinery__col cb-refinery__building">
+            <svg class="cb-refinery__building-svg" viewBox="0 0 160 160" aria-hidden="true">
+              <defs>
+                <linearGradient id="bldgRoof" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--accent-bonds)" stop-opacity="1"/>
+                  <stop offset="100%" stop-color="var(--accent-bonds)" stop-opacity="0.7"/>
+                </linearGradient>
+              </defs>
+              <!-- Step base -->
+              <rect x="6" y="138" width="148" height="10" fill="var(--accent-bonds)" opacity="0.85"/>
+              <rect x="14" y="130" width="132" height="10" fill="var(--accent-bonds)" opacity="0.6"/>
+              <!-- Column block -->
+              <rect x="20" y="50" width="120" height="80" fill="var(--color-navy-900)" stroke="var(--accent-bonds)" stroke-width="1.5"/>
               <!-- Columns -->
-              <rect x="22" y="55" width="14" height="75" fill="var(--color-text-primary)"/>
-              <rect x="46" y="55" width="14" height="75" fill="var(--color-text-primary)"/>
-              <rect x="73" y="55" width="14" height="75" fill="var(--color-text-primary)"/>
-              <rect x="100" y="55" width="14" height="75" fill="var(--color-text-primary)"/>
-              <rect x="124" y="55" width="14" height="75" fill="var(--color-text-primary)"/>
-              <!-- Base -->
-              <rect x="10" y="130" width="140" height="14" fill="var(--accent-bonds)"/>
-              <!-- Door -->
-              <rect x="68" y="90" width="24" height="40" fill="var(--color-navy-1000)"/>
-              <!-- Pediment trim -->
-              <rect x="10" y="48" width="140" height="6" fill="var(--accent-bonds)"/>
+              <rect x="28" y="56" width="11" height="74" fill="var(--color-text-primary)" opacity="0.92"/>
+              <rect x="46" y="56" width="11" height="74" fill="var(--color-text-primary)" opacity="0.92"/>
+              <rect x="64" y="56" width="11" height="74" fill="var(--color-text-primary)" opacity="0.92"/>
+              <rect x="85" y="56" width="11" height="74" fill="var(--color-text-primary)" opacity="0.92"/>
+              <rect x="103" y="56" width="11" height="74" fill="var(--color-text-primary)" opacity="0.92"/>
+              <rect x="121" y="56" width="11" height="74" fill="var(--color-text-primary)" opacity="0.92"/>
+              <!-- Architrave -->
+              <rect x="14" y="44" width="132" height="8" fill="url(#bldgRoof)"/>
+              <!-- Pediment -->
+              <polygon points="80,12 14,44 146,44" fill="url(#bldgRoof)"/>
+              <!-- Pediment ornament -->
+              <circle cx="80" cy="34" r="3" fill="var(--accent-treasury)"/>
             </svg>
             <span class="cb-refinery__building-name">Tipolis</span>
-            <span class="cb-refinery__building-sub">90/10 deploy split</span>
+            <span class="cb-refinery__building-meta">90 / 10 Deploy Split</span>
           </div>
 
           <!-- Pipe -->
           <div class="cb-refinery__pipe" aria-hidden="true"></div>
 
           <!-- RIGHT: Outputs -->
-          <div class="cb-refinery__outputs">
+          <div class="cb-refinery__col cb-refinery__outputs">
             <span class="cb-refinery__col-label">Output</span>
-            <span class="cb-refinery__col-sub">Securitised City Assets</span>
-            <div class="cb-refinery__output-row">
-              <div class="cb-refinery__output cb-refinery__output--strategic">
-                <span class="cb-refinery__output-icon" aria-hidden="true">🎗️</span>
-                <span class="cb-refinery__output-name">CB-20</span>
-                <span class="cb-refinery__output-desc"><strong>Senior Secured</strong> · Fixed 8% Monthly · BTC Upside 50% at Maturity · Low Vol / High Yield / 20y</span>
-              </div>
-              <div class="cb-refinery__output cb-refinery__output--digital">
-                <span class="cb-refinery__output-icon" aria-hidden="true">📊</span>
-                <span class="cb-refinery__output-name">CB-10</span>
-                <span class="cb-refinery__output-desc"><strong>Subordinated</strong> · Fixed 12% Monthly · BTC Upside 50% at Maturity · Mod Vol / Max Yield / 10y</span>
-              </div>
-              <div class="cb-refinery__output cb-refinery__output--peer">
-                <span class="cb-refinery__output-icon" aria-hidden="true">♾️</span>
-                <span class="cb-refinery__output-name">CIP</span>
-                <span class="cb-refinery__output-desc"><strong>Equity Hybrid</strong> · Perpetual · 5% Floor + Equity Participation · No BTC to Investor (100% Tipolis)</span>
-              </div>
-              <div class="cb-refinery__output cb-refinery__output--treasury">
-                <span class="cb-refinery__output-icon" aria-hidden="true">📈</span>
-                <span class="cb-refinery__output-name">TIP</span>
-                <span class="cb-refinery__output-desc"><strong>Common Stock</strong> · No Guaranteed Distribution · Full Residual Upside · Max Vol / Max Upside / Permanent Equity</span>
+            <span class="cb-refinery__col-sub">Four Securitised Products</span>
+            <div class="cb-refinery__output-card">
+              <div class="cb-refinery__output-grid">
+
+                <div class="cb-refinery__product cb-refinery__product--strategic">
+                  <span class="cb-refinery__product-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="11" rx="1"/><path d="M7 8V5h10v3"/><line x1="3" y1="14" x2="21" y2="14"/></svg>
+                  </span>
+                  <span class="cb-refinery__product-name">CB-20</span>
+                  <span class="cb-refinery__product-tag">Senior Secured</span>
+                </div>
+
+                <div class="cb-refinery__product cb-refinery__product--digital">
+                  <span class="cb-refinery__product-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+                  </span>
+                  <span class="cb-refinery__product-name">CB-10</span>
+                  <span class="cb-refinery__product-tag">Subordinated</span>
+                </div>
+
+                <div class="cb-refinery__product cb-refinery__product--peer">
+                  <span class="cb-refinery__product-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 12c0-2.8 2.2-5 5-5s4 2.5 4 5-2 5-4 5-5-2.2-5-5z"/><path d="M19 12c0 2.8-2.2 5-5 5s-4-2.5-4-5 2-5 4-5 5 2.2 5 5z"/></svg>
+                  </span>
+                  <span class="cb-refinery__product-name">CIP</span>
+                  <span class="cb-refinery__product-tag">Equity Hybrid</span>
+                </div>
+
+                <div class="cb-refinery__product cb-refinery__product--treasury">
+                  <span class="cb-refinery__product-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><polyline points="3 18 9 12 13 16 21 6"/><polyline points="15 6 21 6 21 12"/></svg>
+                  </span>
+                  <span class="cb-refinery__product-name">TIP</span>
+                  <span class="cb-refinery__product-tag">Common Stock</span>
+                </div>
+
               </div>
             </div>
           </div>
@@ -2258,50 +2358,8 @@
       <p class="t-body">STRC is a USD-denominated preferred equity instrument backed by Strategy's Bitcoin reserves — approximately <strong>$49B in BTC</strong> as of early 2026, providing 4.5× overcollateralization against ~$3.4B in outstanding STRC obligations. STRC trades around $100/share with average daily volume above $80M. It distributes 9–12% per annum in <strong>monthly USD cash payments</strong> — aligning precisely with Tipolis's monthly City Bond obligation structure.</p>
       <p class="t-body">For Tipolis, holding STRC serves three functions simultaneously: it generates high-yield monthly USD income directly applicable to bond distributions; it is a liquid asset that can be sold rapidly; and it can be pledged as institutional collateral for credit facilities, providing leverage access without forced liquidation.</p>
 
-      <h3 class="t-h3" style="margin-top: 22px; font-size: 17px;">11.2 — Per-$1M STRC: Maximum Bond Issuance Covered</h3>
-      <p class="t-body" style="margin-top: 8px">Framed from Tipolis's capital perspective: for each <strong>$1,000,000 allocated to STRC</strong>, what is the maximum face value of each instrument whose annual coupon obligation can be entirely funded by the resulting STRC income?</p>
-
-      <table class="t-table" style="margin-top: 14px">
-        <thead><tr><th>STRC yield scenario</th><th>Annual STRC income</th><th>Monthly STRC income</th></tr></thead>
-        <tbody>
-          <tr><td>Base case (11%)</td><td>$110,000</td><td>$9,167</td></tr>
-          <tr><td>Pessimistic case (8%)</td><td>$80,000</td><td>$6,667</td></tr>
-        </tbody>
-      </table>
-      <p class="t-footnote" style="margin-top: 6px">STRC annual income generated by $1M position at each scenario.</p>
-
-      <div class="grid-2 cb-cov-tables" style="margin-top: 14px">
-        <div>
-          <table class="t-table cb-cov">
-            <thead><tr><th>Instrument</th><th>Coupon</th><th>Max issuance · 11%</th><th>Coverage</th></tr></thead>
-            <tbody>
-              <tr style="background: hsla(56, 55%, 28%, .55)"><td>CB-20</td><td>8%</td><td>$1,375,000</td><td style="color: hsl(56, 70%, 72%); font-weight: 700">1.38×</td></tr>
-              <tr style="background: hsla(20, 55%, 28%, .55)"><td>CB-10</td><td>12%</td><td>$916,667</td><td style="color: hsl(20, 70%, 72%); font-weight: 700">0.92×</td></tr>
-              <tr style="background: hsla(120, 55%, 28%, .55)"><td>CIP floor</td><td>5%</td><td>$2,200,000</td><td style="color: hsl(120, 70%, 72%); font-weight: 700">2.20×</td></tr>
-            </tbody>
-          </table>
-          <p class="t-footnote" style="margin-top: 6px">Base case — $1M STRC at 11% supports up to this much bond face value while still fully covering the annual coupon obligation.</p>
-        </div>
-
-        <div>
-          <table class="t-table cb-cov">
-            <thead><tr><th>Instrument</th><th>Coupon</th><th>Max issuance · 8%</th><th>Coverage</th></tr></thead>
-            <tbody>
-              <tr style="background: hsla(26, 55%, 28%, .55)"><td>CB-20</td><td>8%</td><td>$1,000,000</td><td style="color: hsl(26, 70%, 72%); font-weight: 700">1.00×</td></tr>
-              <tr style="background: hsla(0, 55%, 28%, .55)"><td>CB-10</td><td>12%</td><td>$666,667</td><td style="color: hsl(0, 75%, 72%); font-weight: 700">0.67×</td></tr>
-              <tr style="background: hsla(73, 55%, 28%, .55)"><td>CIP floor</td><td>5%</td><td>$1,600,000</td><td style="color: hsl(73, 70%, 72%); font-weight: 700">1.60×</td></tr>
-            </tbody>
-          </table>
-          <p class="t-footnote" style="margin-top: 6px">Pessimistic case — same $1M STRC at the stress 8% yield.</p>
-        </div>
-      </div>
-
-      <div class="t-callout" style="margin-top: 14px">
-        <strong>Pessimistic case observation:</strong> at 8% STRC yield, $1M of STRC still supports <strong>$1.00M of CB-20 face (exactly at parity) and $1.60M of CIP face</strong>. CB-10 is the instrument where the capacity multiple falls furthest below 1.0× — $1M of STRC at 8% supports up to $667K of CB-10 face (0.67× capacity) — confirming that CB-10 service must be supplemented by additional corporate cash or by carry from CB-20 and CIP positions in the same portfolio. Notably, with the new 12% CB-10 coupon, CB-10 capacity already runs below 1.0× even at the base 11% STRC scenario (0.92×): the subordinated tranche is now structurally portfolio-funded by design, not occasionally so.
-      </div>
-
-      <h3 class="t-h3" style="margin-top: 22px; font-size: 17px;">11.3 — Tipolis-Facing Interpretation: Issuance Capacity per $1M STRC</h3>
-      <p class="t-body" style="margin-top: 8px">Read from Tipolis's perspective as the issuer, the inverted framing reveals the leverage embedded in the STRC liquidity buffer. Every <strong>$1M allocated to STRC at 11%</strong> generates $110,000 per year in monthly USD distributions — sufficient to fully service <strong>$1.375M of CB-20</strong>, <strong>$917K of CB-10</strong>, or <strong>$2.20M of CIP floor</strong>. In other words, $1 deployed into STRC supports between $0.92 and $2.20 of bond face during the construction ramp — depending on the chosen instrument — entirely from STRC income, without operational cash, asset sales, or leverage.</p>
+      <h3 class="t-h3" style="margin-top: 22px; font-size: 17px;">11.2 — Tipolis-Facing Interpretation: Issuance Capacity per $1M STRC</h3>
+      <p class="t-body" style="margin-top: 8px">Read from Tipolis's perspective as the issuer, the analysis below reveals the leverage embedded in the STRC liquidity buffer. Every <strong>$1M allocated to STRC at 11%</strong> generates $110,000 per year in monthly USD distributions — sufficient to fully service <strong>$1.375M of CB-20</strong>, <strong>$917K of CB-10</strong>, or <strong>$2.20M of CIP floor</strong>. In other words, $1 deployed into STRC supports between $0.92 and $2.20 of bond face during the construction ramp — depending on the chosen instrument — entirely from STRC income, without operational cash, asset sales, or leverage.</p>
       <p class="t-body"><strong>CB-20</strong> remains the most STRC-friendly senior anchor of the suite. Even at the higher 8% coupon, modest STRC positions cover meaningful tranches: $1M of STRC at 11% supports $1.375M of CB-20 face (1.38× capacity multiple). In the stress scenario of 8% STRC yield, the same $1M of STRC supports exactly $1.0M of CB-20 face (1.00× — at parity). The senior tranche's monthly obligations are still well insulated under the base STRC scenario; under stress, parity matching is enforced rather than slack.</p>
       <p class="t-body"><strong>CB-10</strong> is the instrument where the capacity multiple now falls below 1.0× under <em>both</em> scenarios: $0.92M of face per $1M STRC at 11%, $0.67M at 8%. With the new 12% coupon, CB-10 is unambiguously a portfolio-level instrument: its negative carry is managed at the enterprise level — supplemented by CB-20 positive carry and general corporate reserves — rather than fully hedged by STRC alone in any realistic yield scenario.</p>
       <p class="t-body"><strong>CIP</strong> remains the most resilient instrument from a ramp-period liquidity perspective. Its 5% floor means $1M of STRC at 11% supports $2.20M of CIP face; even at 8% it supports $1.60M. The capacity multiple is the highest of the suite by a wide margin.</p>
