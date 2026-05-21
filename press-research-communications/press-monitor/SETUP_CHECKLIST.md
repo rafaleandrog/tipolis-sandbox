@@ -6,6 +6,10 @@ The PR to `main` opens only when every box is checked.
 
 > Working branch: `claude/review-repo-spec-A2hZI`. All commits happen
 > there until the merge.
+>
+> **Sync model:** manual. The owner runs `clasp push` from Google Cloud
+> Shell whenever the backend needs to be updated. No GitHub Actions
+> automation, no local install on the owner's machine.
 
 ---
 
@@ -14,7 +18,6 @@ The PR to `main` opens only when every box is checked.
 - [x] Backend (`apps-script/`): 11 `.gs` files + `appsscript.json` + `.clasp.json` template
 - [x] Frontend (`press-monitor/`): 5 screens + hub + shared CSS/JS
 - [x] `config.js` wired with `WEB_APP_URL` + `BEARER_TOKEN`
-- [x] GitHub Actions workflow (`.github/workflows/clasp-push.yml`)
 - [x] Bug fix: GNews key removed from `SETTINGS_SEED`
 - [x] Docs: root `README.md`, `press-research-communications/README.md`,
       `apps-script/README.md`, `press-monitor/README.md`
@@ -22,23 +25,19 @@ The PR to `main` opens only when every box is checked.
 ## Phase 1 — First sync of the 11 `.gs` to Apps Script  ⏳ next
 
 Replaces the legacy `search news.gs` (OpenAI-based, single file) with the
-11-file Gemini architecture. Done once, via Google Cloud Shell. The same
-session generates the credential we reuse in Phase 4 for auto-deploys.
+11-file Gemini architecture. Done once, via Google Cloud Shell.
 
 - [ ] Backup the current `search news.gs` content (copy the text somewhere
       safe — paste into a local file or a Drive doc)
 - [ ] Get the **Script ID**: Apps Script editor → gear icon (Project
       Settings) → copy the "Script ID" value
 - [ ] Edit `press-research-communications/apps-script/.clasp.json` in this
-      repo and replace `PASTE_YOUR_SCRIPT_ID_HERE` with that Script ID
+      repo (GitHub web UI is fine) and replace `PASTE_YOUR_SCRIPT_ID_HERE`
+      with that Script ID. Commit the change.
 - [ ] Open https://shell.cloud.google.com (Google Cloud Shell)
 - [ ] Run the Cloud Shell commands (see "Next-step playbook" below)
 - [ ] Confirm in the Apps Script editor that the 11 files are there and
       `search news.gs` is gone
-- [ ] **Save the credential as a GitHub Secret** (used in Phase 4):
-      Settings → Secrets and variables → Actions → New repository secret
-      → name `CLASPRC_JSON`, value = full contents of `~/.clasprc.json`
-      printed in Cloud Shell
 
 ## Phase 2 — Sheet bootstrap
 
@@ -79,9 +78,6 @@ others depend on Drive/AI Studio steps.
 - [ ] In the Apps Script editor: **Deploy → Manage deployments → pencil →
       Version: New version → Deploy**. The Web App URL stays the same;
       this just makes the new code live.
-- [ ] Enable the Apps Script API:
-      https://script.google.com/home/usersettings → toggle **Google Apps
-      Script API** to **On**
 
 ## Phase 5 — Smoke test the frontend
 
@@ -100,16 +96,7 @@ already has the right URL + token; this is just opening it and clicking.
 - [ ] Click **Run daily search now** again, then **Run AI filter now**.
       Open `triage.html`, items should appear.
 
-## Phase 6 — Confirm GitHub Actions auto-deploy
-
-- [ ] Make a trivial change to any file under `apps-script/` (e.g. a
-      comment), commit and push to this branch
-- [ ] Open the GitHub Actions tab, run "Push Apps Script to Google"
-      manually (workflow_dispatch) since the trigger is on `main`. After
-      the merge, future commits to `main` fire it automatically.
-- [ ] Verify the change appears in the Apps Script editor
-
-## Phase 7 — Merge
+## Phase 6 — Merge
 
 - [ ] All boxes above checked
 - [ ] Open PR `claude/review-repo-spec-A2hZI` → `main`
@@ -119,8 +106,8 @@ already has the right URL + token; this is just opening it and clicking.
 
 ## Next-step playbook — Phase 1 in Cloud Shell
 
-Open https://shell.cloud.google.com, then paste these one at a time.
-Replace `<SCRIPT_ID>` first.
+After committing the Script ID into `.clasp.json` (third bullet of Phase 1),
+open https://shell.cloud.google.com and paste these in order:
 
 ```bash
 # 1. Install clasp on the Cloud Shell VM (free, ephemeral).
@@ -128,27 +115,25 @@ npm install -g @google/clasp
 
 # 2. Authenticate with the Google account that owns the Sheet.
 clasp login --no-localhost
-# It prints a URL. Open it in a new tab, sign in, allow access,
-# copy the code Google shows you, paste it back into the shell.
+# Open the URL it prints, sign in, allow access, copy the code Google
+# shows you, paste it back into the shell.
 
 # 3. Clone the repo into the shell.
 git clone https://github.com/rafaleandrog/tipolis-sandbox.git
 cd tipolis-sandbox/press-research-communications/apps-script
 
-# 4. Make sure .clasp.json has the real Script ID (you should have
-#    edited and committed it before — if not, do it here):
-nano .clasp.json
-# Replace PASTE_YOUR_SCRIPT_ID_HERE with the actual Script ID, save (Ctrl+O, Enter, Ctrl+X).
-
-# 5. Push all 11 files at once. This replaces the legacy "search news.gs".
+# 4. Push all 11 files at once. This replaces the legacy "search news.gs".
 clasp push --force
 # Confirm "y" if it asks to overwrite remote files.
-
-# 6. Print the credential for the GitHub Secret (Phase 1 last bullet).
-cat ~/.clasprc.json
-# Copy the entire JSON output.
 ```
 
-After this, the Apps Script editor reloaded will show the 11 files,
-the old single file is gone, and you have the JSON to paste as a GitHub
-Secret. Move on to Phase 2.
+Reload the Apps Script editor: the 11 files should be visible. Move on
+to Phase 2.
+
+For future backend updates, the lazy version is:
+
+```bash
+cd ~/tipolis-sandbox && git pull
+cd press-research-communications/apps-script
+clasp push --force
+```

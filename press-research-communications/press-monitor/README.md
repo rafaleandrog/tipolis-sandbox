@@ -55,16 +55,13 @@ the Google Sheet, the AI Studio key, and the Drive folder. The short version:
 
 The five screens are now wired. No further frontend configuration is needed.
 
-## Backend sync (GitHub → Apps Script)
+## Backend sync (repo → Apps Script)
 
 The `.gs` files in this repo do not execute by themselves — Apps Script
-runs from its own project. A GitHub Actions workflow auto-syncs the two:
-every commit to `main` that touches `apps-script/**` runs `clasp push`
-on a GitHub runner, so the backend stays in lockstep with the repo. No
-local install required.
-
-The one-time setup (Apps Script API → credentials → GitHub Secret) is
-documented in [`../apps-script/README.md`](../apps-script/README.md).
+runs from its own project. Sync the two with `clasp push` from Google
+Cloud Shell (browser-based, no local install required); see
+[`../apps-script/README.md`](../apps-script/README.md) for the exact
+commands.
 
 ## Weekly Monday workflow
 

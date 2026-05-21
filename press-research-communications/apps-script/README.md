@@ -2,99 +2,77 @@
 
 The 11 `.gs` files in this folder are the source of truth for the Apps Script
 project bound to the Google Sheet. They do not execute from GitHub — Apps
-Script runs on Google's servers and reads from its own project. This folder
-is kept in sync with that project via [`clasp`](https://github.com/google/clasp).
+Script runs on Google's servers and reads from its own project. To bring the
+two in sync you upload the local files into the Apps Script project with
+[`clasp`](https://github.com/google/clasp) (Google's official CLI).
 
-There are two ways to sync. **Option A (recommended)** uses GitHub Actions and
-requires no local CLI; the workflow at `.github/workflows/clasp-push.yml`
-pushes automatically on every commit to `main`. **Option B** is the manual
-local workflow for when you want to push from your own machine.
+You can run `clasp` either in **Google Cloud Shell** (browser-based, no local
+install — recommended) or on your own machine. The mechanics are the same.
 
-## Option A — Auto-sync via GitHub Actions (no local install)
+## First-time push (Cloud Shell, no local install)
 
-One-time setup, all done in a web browser:
-
-### 1. Enable the Apps Script API
-Open https://script.google.com/home/usersettings and switch **Google Apps
-Script API** to **On**. This must be the same Google account that owns the
-Apps Script project.
-
-### 2. Get the Script ID
-Open the Apps Script project (Sheet → Extensions → Apps Script) →
-**Project Settings** (gear icon on the left) → copy the **Script ID**.
-
-Edit `apps-script/.clasp.json` and replace `PASTE_YOUR_SCRIPT_ID_HERE` with
-that value. Commit the change.
-
-### 3. Generate clasp credentials in Google Cloud Shell
-
-Open https://shell.cloud.google.com (browser-based Linux terminal, free, no
-install). In the shell, run:
+Open https://shell.cloud.google.com and run, in order:
 
 ```bash
+# 1. Install clasp in the ephemeral Cloud Shell VM.
 npm install -g @google/clasp
+
+# 2. Sign in with the Google account that owns the Sheet.
 clasp login --no-localhost
+# Open the URL it prints, allow access, paste the code back into the shell.
+
+# 3. Clone this repo into the shell.
+git clone https://github.com/rafaleandrog/tipolis-sandbox.git
+cd tipolis-sandbox/press-research-communications/apps-script
+
+# 4. Make sure .clasp.json carries the real Script ID.
+#    (If you already committed the Script ID from the GitHub UI, skip this.)
+nano .clasp.json
+# Replace PASTE_YOUR_SCRIPT_ID_HERE with the Script ID from Apps Script
+# → Project Settings, save (Ctrl+O, Enter, Ctrl+X).
+
+# 5. Push all 11 files at once. This overwrites the legacy file(s) in the
+#    project. Confirm "y" if it asks before deleting remote files.
+clasp push --force
 ```
 
-It prints a long URL. Open it in a new tab, pick the same Google account
-that owns the Sheet, allow access. Google shows a code — paste it back into
-the Cloud Shell prompt. The shell writes `~/.clasprc.json`.
+Reload the Apps Script editor: the 11 `.gs` files plus `appsscript.json`
+should be there, and the legacy single file should be gone.
 
-Print and copy the entire contents:
+## Re-deploying the Web App
 
-```bash
-cat ~/.clasprc.json
-```
+`clasp push` updates the script files, but the public Web App URL still
+serves the previously deployed version. To make new code live:
 
-Select all the output and copy it.
+- Apps Script editor → **Deploy → Manage deployments → pencil icon →
+  Version: New version → Deploy**.
+- The `/exec` URL stays the same.
 
-### 4. Save the credentials as a GitHub Secret
+## Future updates
 
-In this repository on GitHub: **Settings → Secrets and variables → Actions →
-New repository secret**.
-- Name: `CLASPRC_JSON`
-- Value: paste the entire JSON from the previous step.
+Two reasonable workflows once the first push is done:
 
-Save.
-
-### 5. Trigger the first push
-
-Either:
-- Make any change to a `.gs` file and push to `main`, or
-- Go to **Actions → Push Apps Script to Google → Run workflow**.
-
-The job installs clasp on the GitHub runner, writes the credentials file,
-verifies the Script ID is set, and runs `clasp push --force`. Takes ~30s.
-After that, every push to `main` that touches `apps-script/**` auto-deploys.
-
-GitHub Actions is free for this repository (public repos = unlimited minutes;
-private repos = 2,000 minutes/month and this job uses well under a minute).
-
-### Re-deploying the Web App
-
-`clasp push` updates the script files, but the public Web App URL only sees
-new code after you redeploy. Either:
-- In the Apps Script editor: **Deploy → Manage deployments → pencil icon →
-  Version: New version → Deploy**. The URL stays the same.
-- Or accept that the existing deployment will keep running the previous
-  version until you bump it.
-
-(There is no automated redeploy in the workflow — Google does not allow
-unattended Web App deployments without OAuth scopes the owner has to grant.
-Bumping the deployment from the editor takes ~5 seconds.)
-
-## Option B — Manual local push
-
-Only needed if you prefer not to use the GitHub Actions route.
+**A. Edit in the repo, push from Cloud Shell when you want to sync.**
 
 ```bash
-npm install -g @google/clasp
-clasp login
-# edit .clasp.json with your Script ID once
+# In a fresh Cloud Shell session:
+cd ~/tipolis-sandbox && git pull
 cd press-research-communications/apps-script
-clasp push    # upload local files
-clasp pull    # download remote state if it diverged
+clasp push --force
 ```
+
+**B. Edit directly in the Apps Script editor, pull back into the repo
+periodically** (keeps the repo as a historical mirror).
+
+```bash
+cd ~/tipolis-sandbox/press-research-communications/apps-script
+clasp pull
+cd ~/tipolis-sandbox
+git add -A && git commit -m "sync: pull Apps Script edits" && git push
+```
+
+Pick one direction and stay with it — flipping between the two on the
+same file risks overwriting work.
 
 ## Files
 
