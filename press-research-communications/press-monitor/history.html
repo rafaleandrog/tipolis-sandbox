@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>History — Press Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Jost:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/tipolis-design-system.css">
+  <link rel="stylesheet" href="../../assets/css/style.css">
+  <link rel="stylesheet" href="./assets/css/main.css">
+</head>
+<body class="page--press-research-communications">
+  <nav class="t-nav pm-nav" aria-label="Press Monitor sections">
+    <a class="t-nav__brand" href="../">
+      <span>Tipolis · Press Monitor</span>
+    </a>
+    <div class="t-nav__items">
+      <a class="t-pill" href="./">Hub</a>
+      <a class="t-pill" href="./terms.html">Terms</a>
+      <a class="t-pill" href="./triage.html">Triage</a>
+      <a class="t-pill" href="./summary.html">Summary</a>
+      <a class="t-pill" href="./report.html">Report</a>
+      <a class="t-pill is-active" href="./history.html" aria-current="page">History</a>
+    </div>
+  </nav>
+
+  <main class="t-main">
+    <header class="t-hero">
+      <span class="t-hero__overline">Archive</span>
+      <h1 class="t-hero__title">History. <span>Grouped by country.</span></h1>
+      <p class="t-hero__lead">Every archived article sits here forever. Click a country to drill into its articles with rendered bullets.</p>
+    </header>
+
+    <section data-view="countries">
+      <div class="pm-filter-row">
+        <span class="pm-filter-row__label">Region</span>
+        <select class="t-input" data-region style="width:180px"></select>
+        <span class="pm-toolbar__spacer"></span>
+        <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh</button>
+      </div>
+
+      <div data-error class="pm-error" hidden></div>
+      <div data-state="loading" class="pm-loading">Loading history</div>
+      <div data-empty class="pm-empty" hidden>No archived items yet.</div>
+      <div class="pm-history-grid" data-grid></div>
+    </section>
+
+    <section data-view="articles" hidden>
+      <div class="pm-toolbar">
+        <button class="pm-btn pm-btn--ghost" data-action="back">← Back to countries</button>
+        <span class="pm-toolbar__spacer"></span>
+        <span class="pm-filter-row__label">Category</span>
+        <select class="t-input" data-category style="width:160px">
+          <option value="">All</option>
+          <option value="tipolis">tipolis</option>
+          <option value="industry">industry</option>
+        </select>
+      </div>
+      <h2 class="t-h2 t-h2--sm" data-country-title></h2>
+      <div data-articles-state class="pm-loading">Loading articles</div>
+      <div data-articles></div>
+    </section>
+  </main>
+
+  <script src="./assets/js/config.js"></script>
+  <script src="./assets/js/api.js"></script>
+  <script>
+    (function () {
+      const views = {
+        countries: document.querySelector('[data-view="countries"]'),
+        articles: document.querySelector('[data-view="articles"]')
+      };
+      const errorBox = document.querySelector('[data-error]');
+      const loading = document.querySelector('[data-state="loading"]');
+      const emptyEl = document.querySelector('[data-empty]');
+      const grid = document.querySelector('[data-grid]');
+      const regionSelect = document.querySelector('[data-region]');
+      const categorySelect = document.querySelector('[data-category]');
+      const articlesState = document.querySelector('[data-articles-state]');
+      const articlesHost = document.querySelector('[data-articles]');
+      const countryTitle = document.querySelector('[data-country-title]');
+
+      const state = { countries: [], region: '', country: null };
+
+      function showError(msg) { errorBox.textContent = msg; errorBox.hidden = false; }
+
+      function buildCountryCard(c) {
+        const card = PM.el('button', { class: 'pm-history-card' }, [
+          PM.el('div', { class: 'pm-history-card__country' }, [c.country || 'Unknown']),
+          PM.el('div', { class: 'pm-history-card__region' }, [c.region || '—']),
+          PM.el('div', { class: 'pm-history-card__stats' }, [
+            PM.el('span', { class: 'pm-history-card__count' }, [String(c.count)]),
+            PM.el('span', null, [PM.formatDate(c.latest)])
+          ])
+        ]);
+        card.addEventListener('click', () => openCountry(c));
+        return card;
+      }
+
+      function renderCountries() {
+        grid.innerHTML = '';
+        const filtered = state.region
+          ? state.countries.filter(c => c.region === state.region)
+          : state.countries;
+        if (!filtered.length) {
+          emptyEl.hidden = false;
+          return;
+        }
+        emptyEl.hidden = true;
+        filtered.forEach(c => grid.appendChild(buildCountryCard(c)));
+      }
+
+      function populateRegions() {
+        const set = new Set(state.countries.map(c => c.region).filter(Boolean));
+        regionSelect.innerHTML = '';
+        regionSelect.appendChild(PM.el('option', { value: '' }, ['All regions']));
+        Array.from(set).sort().forEach(r =>
+          regionSelect.appendChild(PM.el('option', { value: r }, [r]))
+        );
+      }
+
+      async function loadCountries() {
+        loading.hidden = false;
+        emptyEl.hidden = true;
+        errorBox.hidden = true;
+        try {
+          state.countries = await PM.apiGet('/history/countries') || [];
+          loading.hidden = true;
+          populateRegions();
+          renderCountries();
+        } catch (err) {
+          loading.hidden = true;
+          showError(err.message);
+        }
+      }
+
+      function buildArticle(a) {
+        const bulletsList = PM.el('ul', { class: 'pm-history-article__bullets' },
+          (a.bullets || []).map(b => PM.el('li', { html: PM.renderMarkdown(b) }))
+        );
+        const headlineHtml = a.headline_line
+          ? PM.renderMarkdown(a.headline_line)
+          : PM.escapeHtml((a.source || '') + ': ') + '<a href="' +
+            encodeURI(a.link || '#') + '" target="_blank" rel="noopener">' +
+            PM.escapeHtml(a.title || '') + '</a>';
+
+        return PM.el('article', { class: 'pm-history-article' }, [
+          PM.el('div', { class: 'pm-history-article__meta' }, [
+            a.category ? PM.el('span', null, [a.category]) : null,
+            a.region ? PM.el('span', null, [a.region]) : null,
+            a.source ? PM.el('span', null, [a.source]) : null,
+            a.publishedAt ? PM.el('span', null, [PM.formatDate(a.publishedAt)]) : null,
+            a.week ? PM.el('span', null, ['Week ' + a.week + (a.year ? '/' + a.year : '')]) : null,
+            a.docUrl ? PM.el('a', { href: a.docUrl, target: '_blank', rel: 'noopener' }, ['Report ↗']) : null
+          ]),
+          PM.el('div', { class: 'pm-history-article__headline', html: headlineHtml }),
+          bulletsList
+        ]);
+      }
+
+      async function openCountry(c) {
+        state.country = c;
+        views.countries.hidden = true;
+        views.articles.hidden = false;
+        countryTitle.textContent = c.country;
+        await loadArticles();
+      }
+
+      async function loadArticles() {
+        if (!state.country) return;
+        articlesState.hidden = false;
+        articlesState.textContent = 'Loading articles';
+        articlesHost.innerHTML = '';
+        try {
+          const params = { country: state.country.country };
+          const cat = categorySelect.value;
+          if (cat) params.category = cat;
+          const data = await PM.apiGet('/history', params) || [];
+          articlesState.hidden = true;
+          if (!data.length) {
+            articlesHost.appendChild(PM.el('div', { class: 'pm-empty' }, ['No articles match this filter.']));
+            return;
+          }
+          data
+            .sort((a, b) => String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')))
+            .forEach(a => articlesHost.appendChild(buildArticle(a)));
+        } catch (err) {
+          articlesState.hidden = false;
+          articlesState.textContent = err.message;
+        }
+      }
+
+      regionSelect.addEventListener('change', () => {
+        state.region = regionSelect.value;
+        renderCountries();
+      });
+      categorySelect.addEventListener('change', loadArticles);
+      document.querySelector('[data-action="refresh"]').addEventListener('click', loadCountries);
+      document.querySelector('[data-action="back"]').addEventListener('click', () => {
+        views.countries.hidden = false;
+        views.articles.hidden = true;
+        state.country = null;
+      });
+
+      loadCountries();
+    })();
+  </script>
+</body>
+</html>
