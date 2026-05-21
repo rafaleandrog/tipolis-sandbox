@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Press Monitor — Tipolis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Jost:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/tipolis-design-system.css">
+  <link rel="stylesheet" href="../../assets/css/style.css">
+  <link rel="stylesheet" href="./assets/css/main.css">
+</head>
+<body class="page--press-research-communications">
+  <nav class="t-nav pm-nav" aria-label="Press Monitor sections">
+    <a class="t-nav__brand" href="../">
+      <span>Tipolis · Press Monitor</span>
+    </a>
+    <div class="t-nav__items">
+      <a class="t-pill is-active" href="./" aria-current="page">Hub</a>
+      <a class="t-pill" href="./terms.html">Terms</a>
+      <a class="t-pill" href="./triage.html">Triage</a>
+      <a class="t-pill" href="./summary.html">Summary</a>
+      <a class="t-pill" href="./report.html">Report</a>
+      <a class="t-pill" href="./history.html">History</a>
+    </div>
+  </nav>
+
+  <main class="t-main">
+    <header class="t-hero">
+      <span class="t-hero__overline">Tipolis Press Monitor</span>
+      <h1 class="t-hero__title">Weekly news pipeline. <span>From RSS to a branded report.</span></h1>
+      <p class="t-hero__lead">Five operational screens drive the Monday workflow: maintain the search terms, triage the AI-classified results, edit the bullet summary one item at a time, preview the report, generate the Doc, and browse the archived history grouped by country.</p>
+    </header>
+
+    <section>
+      <span class="t-eyebrow">Workflow</span>
+      <h2 class="t-h2 t-h2--sm">Pick a screen</h2>
+      <p class="t-lead">Each card opens the screen that handles that step. The Apps Script Web App is the only backend — the Google Sheet stores everything else.</p>
+
+      <div class="pm-hub-grid">
+        <a class="pm-hub-card" href="./terms.html">
+          <span class="pm-hub-card__eyebrow">Step 0 · Maintain</span>
+          <span class="pm-hub-card__title">Search terms</span>
+          <span class="pm-hub-card__body">Enable, disable, or fine-tune the keywords the daily search uses.</span>
+        </a>
+        <a class="pm-hub-card" href="./triage.html">
+          <span class="pm-hub-card__eyebrow">Step 1 · Triage</span>
+          <span class="pm-hub-card__title">Approve or reject</span>
+          <span class="pm-hub-card__body">Review the classified week and approve the items that go into this week's report.</span>
+        </a>
+        <a class="pm-hub-card" href="./summary.html">
+          <span class="pm-hub-card__eyebrow">Step 2 · Edit</span>
+          <span class="pm-hub-card__title">Summary wizard</span>
+          <span class="pm-hub-card__body">Trim the AI-generated bullets one article at a time. 6–10 → 3–5.</span>
+        </a>
+        <a class="pm-hub-card" href="./report.html">
+          <span class="pm-hub-card__eyebrow">Step 3 · Generate</span>
+          <span class="pm-hub-card__title">Preview &amp; report</span>
+          <span class="pm-hub-card__body">Reorder by section, generate the Word/Doc copy, then archive the week.</span>
+        </a>
+        <a class="pm-hub-card" href="./history.html">
+          <span class="pm-hub-card__eyebrow">Browse</span>
+          <span class="pm-hub-card__title">History</span>
+          <span class="pm-hub-card__body">Every archived article grouped by country. Click to drill in.</span>
+        </a>
+      </div>
+    </section>
+
+    <hr class="t-divider">
+
+    <section>
+      <span class="t-eyebrow">Manual triggers</span>
+      <h2 class="t-h2 t-h2--sm">Run now</h2>
+      <p class="t-lead">Bypass the scheduled triggers when you need a fresh batch on demand. Both calls return immediately; check the <em>logs</em> sheet for progress.</p>
+
+      <div class="pm-toolbar">
+        <button class="pm-btn pm-btn--ghost" data-action="search">Run daily search now</button>
+        <button class="pm-btn pm-btn--ghost" data-action="filter">Run AI filter now</button>
+        <span class="pm-toolbar__spacer"></span>
+        <span class="pm-toolbar__status" data-status></span>
+      </div>
+    </section>
+  </main>
+
+  <script src="./assets/js/config.js"></script>
+  <script src="./assets/js/api.js"></script>
+  <script>
+    (function () {
+      const status = document.querySelector('[data-status]');
+      document.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const action = btn.dataset.action;
+          const path = action === 'search' ? '/search/run' : '/filter/run';
+          const label = action === 'search' ? 'Daily search' : 'AI filter';
+          PM.showStatus(status, 'saving', label + '… running');
+          btn.disabled = true;
+          try {
+            await PM.apiPost(path);
+            PM.showStatus(status, 'saved', label + ' started');
+            PM.toast(label + ' started', 'success');
+          } catch (err) {
+            PM.showStatus(status, 'error', err.message);
+            PM.toast(err.message, 'error');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

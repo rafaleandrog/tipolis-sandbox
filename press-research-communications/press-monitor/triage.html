@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Triage — Press Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Jost:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/tipolis-design-system.css">
+  <link rel="stylesheet" href="../../assets/css/style.css">
+  <link rel="stylesheet" href="./assets/css/main.css">
+</head>
+<body class="page--press-research-communications">
+  <nav class="t-nav pm-nav" aria-label="Press Monitor sections">
+    <a class="t-nav__brand" href="../">
+      <span>Tipolis · Press Monitor</span>
+    </a>
+    <div class="t-nav__items">
+      <a class="t-pill" href="./">Hub</a>
+      <a class="t-pill" href="./terms.html">Terms</a>
+      <a class="t-pill is-active" href="./triage.html" aria-current="page">Triage</a>
+      <a class="t-pill" href="./summary.html">Summary</a>
+      <a class="t-pill" href="./report.html">Report</a>
+      <a class="t-pill" href="./history.html">History</a>
+    </div>
+  </nav>
+
+  <main class="t-main">
+    <header class="t-hero">
+      <span class="t-hero__overline">Step 1 · Triage</span>
+      <h1 class="t-hero__title">Approve <span>or reject</span> the week.</h1>
+      <p class="t-hero__lead">Each card is one classified, in-window article. Approve to send it to the summary editor; reject to drop it. The report window is the previous Monday 00:00 through last Sunday 23:59.</p>
+    </header>
+
+    <section>
+      <span class="t-eyebrow">Filter</span>
+      <h2 class="t-h2 t-h2--sm">Pending</h2>
+      <p class="t-lead">Use the filters to focus on one category at a time. Rejected items are hidden by default.</p>
+
+      <div class="pm-filter-row">
+        <span class="pm-filter-row__label">Category</span>
+        <button class="t-pill is-active" data-filter="both">Both</button>
+        <button class="t-pill" data-filter="tipolis">Tipolis</button>
+        <button class="t-pill" data-filter="industry">Industry</button>
+        <span class="pm-filter-row__label" style="margin-left:24px">View</span>
+        <button class="t-pill" data-toggle-rejected aria-pressed="false">Show rejected</button>
+        <span class="pm-toolbar__spacer"></span>
+        <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh</button>
+      </div>
+
+      <div class="pm-triage-counter" data-counter>
+        <span><strong data-count-pending>0</strong> pending</span>
+        <span><strong data-count-approved>0</strong> approved this session</span>
+        <span><strong data-count-rejected>0</strong> rejected this session</span>
+      </div>
+
+      <hr class="t-divider">
+
+      <div data-error class="pm-error" hidden></div>
+      <div data-state="loading" class="pm-loading">Loading triage queue</div>
+      <div data-empty class="pm-empty" hidden>No items in the queue for the current filter.</div>
+      <div data-list class="pm-triage-list"></div>
+    </section>
+  </main>
+
+  <script src="./assets/js/config.js"></script>
+  <script src="./assets/js/api.js"></script>
+  <script>
+    (function () {
+      const errorBox = document.querySelector('[data-error]');
+      const loading = document.querySelector('[data-state="loading"]');
+      const emptyEl = document.querySelector('[data-empty]');
+      const listEl = document.querySelector('[data-list]');
+      const counts = {
+        pending: document.querySelector('[data-count-pending]'),
+        approved: document.querySelector('[data-count-approved]'),
+        rejected: document.querySelector('[data-count-rejected]')
+      };
+
+      const state = {
+        items: [],
+        filter: 'both',
+        showRejected: false,
+        sessionApproved: 0,
+        sessionRejected: 0
+      };
+
+      function showError(msg) {
+        errorBox.textContent = msg;
+        errorBox.hidden = false;
+      }
+
+      function render() {
+        listEl.innerHTML = '';
+        const filtered = state.items.filter(item => {
+          if (state.filter === 'tipolis' && item.category !== 'tipolis') return false;
+          if (state.filter === 'industry' && item.category !== 'industry') return false;
+          return true;
+        });
+        if (!filtered.length) {
+          emptyEl.hidden = false;
+          counts.pending.textContent = '0';
+          counts.approved.textContent = state.sessionApproved;
+          counts.rejected.textContent = state.sessionRejected;
+          return;
+        }
+        emptyEl.hidden = true;
+        counts.pending.textContent = filtered.length;
+        counts.approved.textContent = state.sessionApproved;
+        counts.rejected.textContent = state.sessionRejected;
+
+        filtered.forEach(item => {
+          const cardClass = 'pm-triage-card ' +
+            (item.category === 'tipolis' ? 'pm-triage-card--tipolis' : 'pm-triage-card--industry');
+
+          const meta = PM.el('div', { class: 'pm-triage-card__meta' }, [
+            PM.el('span', { class: 'pm-tag' }, [item.category || 'unclassified']),
+            item.country ? PM.el('span', null, [item.country]) : null,
+            item.region ? PM.el('span', null, [item.region]) : null,
+            item.source ? PM.el('span', null, [item.source]) : null,
+            item.publishedAt ? PM.el('span', null, [PM.formatDate(item.publishedAt)]) : null,
+            item.relevance ? PM.el('span', null, ['relevance: ' + item.relevance]) : null
+          ]);
+
+          const title = PM.el('h3', { class: 'pm-triage-card__title' }, [
+            PM.el('a', { href: item.link, target: '_blank', rel: 'noopener' }, [item.title || '(untitled)'])
+          ]);
+
+          const desc = PM.el('p', { class: 'pm-triage-card__description' }, [item.description || '']);
+
+          const reason = item.reason
+            ? PM.el('div', { class: 'pm-triage-card__reason' }, ['AI: ' + item.reason])
+            : null;
+
+          const approveBtn = PM.el('button', { class: 'pm-btn pm-btn--success' }, ['Approve']);
+          const rejectBtn = PM.el('button', { class: 'pm-btn pm-btn--danger' }, ['Reject']);
+          const actions = PM.el('div', { class: 'pm-triage-card__actions' }, [approveBtn, rejectBtn]);
+
+          approveBtn.addEventListener('click', () => doApprove(item, approveBtn, rejectBtn));
+          rejectBtn.addEventListener('click', () => doReject(item, approveBtn, rejectBtn));
+
+          const card = PM.el('article', { class: cardClass }, [meta, title, desc, reason, actions]);
+          card.dataset.row = String(item.row);
+          listEl.appendChild(card);
+        });
+      }
+
+      function removeItemByRow(row) {
+        state.items = state.items.filter(i => i.row !== row);
+        render();
+      }
+
+      async function doApprove(item, ...btns) {
+        btns.forEach(b => b.disabled = true);
+        try {
+          await PM.apiPost('/triage/approve', { row: item.row });
+          state.sessionApproved++;
+          PM.toast('Approved · summary queued', 'success');
+          removeItemByRow(item.row);
+        } catch (err) {
+          PM.toast(err.message, 'error');
+          btns.forEach(b => b.disabled = false);
+        }
+      }
+
+      async function doReject(item, ...btns) {
+        btns.forEach(b => b.disabled = true);
+        try {
+          await PM.apiPost('/triage/reject', { row: item.row });
+          state.sessionRejected++;
+          PM.toast('Rejected', 'success');
+          removeItemByRow(item.row);
+        } catch (err) {
+          PM.toast(err.message, 'error');
+          btns.forEach(b => b.disabled = false);
+        }
+      }
+
+      async function load() {
+        loading.hidden = false;
+        emptyEl.hidden = true;
+        errorBox.hidden = true;
+        try {
+          const params = state.showRejected ? { showRejected: 'true' } : null;
+          const data = await PM.apiGet('/triage', params);
+          state.items = data || [];
+          loading.hidden = true;
+          render();
+        } catch (err) {
+          loading.hidden = true;
+          showError(err.message);
+        }
+      }
+
+      document.querySelectorAll('[data-filter]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('is-active', b === btn));
+          state.filter = btn.dataset.filter;
+          render();
+        });
+      });
+
+      const rejBtn = document.querySelector('[data-toggle-rejected]');
+      rejBtn.addEventListener('click', () => {
+        state.showRejected = !state.showRejected;
+        rejBtn.setAttribute('aria-pressed', String(state.showRejected));
+        rejBtn.classList.toggle('is-active', state.showRejected);
+        load();
+      });
+
+      document.querySelector('[data-action="refresh"]').addEventListener('click', load);
+
+      load();
+    })();
+  </script>
+</body>
+</html>
