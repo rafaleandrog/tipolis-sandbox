@@ -55,26 +55,16 @@ the Google Sheet, the AI Studio key, and the Drive folder. The short version:
 
 The five screens are now wired. No further frontend configuration is needed.
 
-## Backend sync with clasp (optional but recommended)
+## Backend sync (GitHub → Apps Script)
 
-Avoids copy-pasting 11 files every time the backend changes.
+The `.gs` files in this repo do not execute by themselves — Apps Script
+runs from its own project. A GitHub Actions workflow auto-syncs the two:
+every commit to `main` that touches `apps-script/**` runs `clasp push`
+on a GitHub runner, so the backend stays in lockstep with the repo. No
+local install required.
 
-```bash
-npm install -g @google/clasp
-clasp login
-```
-
-Edit `../apps-script/.clasp.json` and replace `PASTE_YOUR_SCRIPT_ID_HERE`
-with the value from **Apps Script → Project Settings → Script ID**.
-
-```bash
-cd press-research-communications/apps-script
-clasp push    # upload local .gs + manifest to the project
-clasp pull    # download remote state if it diverged
-```
-
-`clasp` keeps the `00_`, `01_`, … prefixes for display order; runtime
-scope is shared across files anyway.
+The one-time setup (Apps Script API → credentials → GitHub Secret) is
+documented in [`../apps-script/README.md`](../apps-script/README.md).
 
 ## Weekly Monday workflow
 
