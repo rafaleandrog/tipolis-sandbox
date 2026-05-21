@@ -7,37 +7,47 @@ The PR to `main` opens only when every box is checked.
 > Working branch: `claude/review-repo-spec-A2hZI`. All commits happen
 > there until the merge.
 >
-> **Sync model:** manual. The owner runs `clasp push` from Google Cloud
-> Shell whenever the backend needs to be updated. No GitHub Actions
-> automation, no local install on the owner's machine.
+> **Sync model:** manual paste-direct, no tooling. The owner copies the
+> consolidated single-file build into one `.gs` file in the Apps Script
+> editor. `clasp` and automation are deferred to later.
 
 ---
 
 ## Phase 0 — Code in the repo  ✅ done
 
 - [x] Backend (`apps-script/`): 11 `.gs` files + `appsscript.json` + `.clasp.json` template
+- [x] **Consolidated single-file build** at
+      `press-research-communications/Tipolis_Press_Monitor.consolidated.gs`
+      (1667 lines, all 11 files concatenated in order)
 - [x] Frontend (`press-monitor/`): 5 screens + hub + shared CSS/JS
 - [x] `config.js` wired with `WEB_APP_URL` + `BEARER_TOKEN`
 - [x] Bug fix: GNews key removed from `SETTINGS_SEED`
 - [x] Docs: root `README.md`, `press-research-communications/README.md`,
       `apps-script/README.md`, `press-monitor/README.md`
 
-## Phase 1 — First sync of the 11 `.gs` to Apps Script  ⏳ next
+## Phase 1 — Paste the consolidated build into Apps Script  ⏳ next
 
 Replaces the legacy `search news.gs` (OpenAI-based, single file) with the
-11-file Gemini architecture. Done once, via Google Cloud Shell.
+11-file Gemini architecture, delivered as one giant `.gs` you paste in
+the editor.
 
-- [ ] Backup the current `search news.gs` content (copy the text somewhere
-      safe — paste into a local file or a Drive doc)
-- [ ] Get the **Script ID**: Apps Script editor → gear icon (Project
-      Settings) → copy the "Script ID" value
-- [ ] Edit `press-research-communications/apps-script/.clasp.json` in this
-      repo (GitHub web UI is fine) and replace `PASTE_YOUR_SCRIPT_ID_HERE`
-      with that Script ID. Commit the change.
-- [ ] Open https://shell.cloud.google.com (Google Cloud Shell)
-- [ ] Run the Cloud Shell commands (see "Next-step playbook" below)
-- [ ] Confirm in the Apps Script editor that the 11 files are there and
-      `search news.gs` is gone
+- [ ] Backup the current `search news.gs` content (copy the text into a
+      local file or a Drive doc — the paste will overwrite it)
+- [ ] Open the consolidated file on GitHub:
+      `press-research-communications/Tipolis_Press_Monitor.consolidated.gs`
+      → click **Raw** → Ctrl/Cmd+A to select all → Ctrl/Cmd+C to copy
+- [ ] In the Apps Script editor:
+  - [ ] Delete the existing `search news.gs` (or rename it to `Code` and
+        clear its contents)
+  - [ ] Paste the consolidated content into one `.gs` file (Ctrl/Cmd+V)
+  - [ ] Save (Ctrl/Cmd+S)
+- [ ] (Optional but recommended) Update the manifest so the Web App
+      deployment settings match the spec:
+  - [ ] Project Settings (gear icon) → enable
+        **Show "appsscript.json" manifest file in editor**
+  - [ ] Open `appsscript.json` and replace its content with the file at
+        `press-research-communications/apps-script/appsscript.json`
+        in this repo. Save.
 
 ## Phase 2 — Sheet bootstrap
 
@@ -104,36 +114,11 @@ already has the right URL + token; this is just opening it and clicking.
 
 ---
 
-## Next-step playbook — Phase 1 in Cloud Shell
+## Deferred — clasp / GitHub Actions
 
-After committing the Script ID into `.clasp.json` (third bullet of Phase 1),
-open https://shell.cloud.google.com and paste these in order:
-
-```bash
-# 1. Install clasp on the Cloud Shell VM (free, ephemeral).
-npm install -g @google/clasp
-
-# 2. Authenticate with the Google account that owns the Sheet.
-clasp login --no-localhost
-# Open the URL it prints, sign in, allow access, copy the code Google
-# shows you, paste it back into the shell.
-
-# 3. Clone the repo into the shell.
-git clone https://github.com/rafaleandrog/tipolis-sandbox.git
-cd tipolis-sandbox/press-research-communications/apps-script
-
-# 4. Push all 11 files at once. This replaces the legacy "search news.gs".
-clasp push --force
-# Confirm "y" if it asks to overwrite remote files.
-```
-
-Reload the Apps Script editor: the 11 files should be visible. Move on
-to Phase 2.
-
-For future backend updates, the lazy version is:
-
-```bash
-cd ~/tipolis-sandbox && git pull
-cd press-research-communications/apps-script
-clasp push --force
-```
+When the manual paste flow starts to feel annoying (typically: after the
+second or third backend edit), revisit
+[`../apps-script/README.md`](../apps-script/README.md) for the `clasp
+push` workflow via Google Cloud Shell. That removes the need to copy-paste
+the consolidated file every time. GitHub Actions auto-deploy on top of
+that is a further step we can add later.
