@@ -126,7 +126,7 @@ const SETTINGS_SEED = [
   ['last_report_date', '2026-05-18', 'Date (yyyy-mm-dd) of the most recent report'],
   ['gemini_api_key', '', 'Google AI Studio API key — PASTE HERE'],
   ['gemini_model', 'gemini-2.5-flash', 'Gemini model id (e.g. gemini-2.5-flash or gemini-3-flash-preview)'],
-  ['gnews_api_key', '5813216511ffa0bc6228e89030e4e3b6', 'GNews API key (fallback search)'],
+  ['gnews_api_key', '', 'GNews API key (fallback search) — PASTE HERE'],
   ['report_drive_folder_id', '', 'Drive folder ID where generated reports are saved — PASTE HERE'],
   ['report_template_doc_id', '', 'Google Doc ID of the report template — PASTE HERE'],
   ['daily_search_auto_run', 'true', 'Toggle the daily search trigger'],
