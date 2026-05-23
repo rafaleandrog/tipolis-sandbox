@@ -44,8 +44,8 @@ the Google Sheet, the AI Studio key, and the Drive folder. The short version:
    - `report_drive_folder_id`
    - `report_template_doc_id`
    - `frontend_bearer_token` (any random 32+ char string)
-5. Run **Install all triggers** from the menu (06:00 daily search, Mon 07:00
-   weekly AI filter).
+5. Run **Install all triggers** from the menu (06:00 daily search, 07:00
+   daily AI filter).
 6. **Deploy → New deployment → Web app** (execute as you, anyone access).
    Copy the `/exec` URL.
 7. Open `assets/js/config.js` and paste both the URL and the bearer token.

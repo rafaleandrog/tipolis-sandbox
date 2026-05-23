@@ -84,7 +84,7 @@ others depend on Drive/AI Studio steps.
 ## Phase 4 — Activate the pipeline
 
 - [ ] In the Sheet menu: **Tipolis → Install all triggers** (daily 06:00
-      search; Monday 07:00 AI filter)
+      search; daily 07:00 AI filter)
 - [ ] In the Apps Script editor: **Deploy → Manage deployments → pencil →
       Version: New version → Deploy**. The Web App URL stays the same;
       this just makes the new code live.

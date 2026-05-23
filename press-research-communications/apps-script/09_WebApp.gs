@@ -122,14 +122,20 @@ function api_listTriage_(params) {
   const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
   if (last < 2) return [];
   const showRejected = params && params.showRejected === 'true';
+  const allDates = params && params.allDates === 'true';
+  const win = allDates ? null : getReportWindow_();
   const data = sheet.getRange(2, 1, last - 1, APP.HEADERS.RESULTS.length).getValues();
   const out = [];
   data.forEach((r, i) => {
     const status = String(r[C.FILTER_STATUS - 1] || '');
-    if (status !== 'Done') return;                     // only classified, in-window rows
+    if (status !== 'Done') return;                     // only classified rows
     const rel = String(r[C.AI_RELEVANCE - 1] || '');
     if (!showRejected && rel === 'reject') return;
     if (r[C.APPROVED - 1] === true) return;            // hide already-approved
+    if (win) {
+      const published = parseDateLoose_(r[C.PUBLISHED_AT - 1]);
+      if (!published || published < win.start || published > win.end) return;
+    }
     out.push({
       row: i + 2,
       term: r[C.TERM - 1], publishedAt: r[C.PUBLISHED_AT - 1], source: r[C.SOURCE - 1],

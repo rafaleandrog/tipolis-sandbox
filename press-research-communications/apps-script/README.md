@@ -86,7 +86,7 @@ same file risks overwriting work.
 | `05_AISummary.gs` | Per-article bullet generation |
 | `06_Report.gs` | Doc template copy + markdown injection |
 | `07_Archive.gs` | Move approved_news → approved_history, reset |
-| `08_Triggers.gs` | Time-driven triggers (daily search, weekly filter) |
+| `08_Triggers.gs` | Time-driven triggers (daily search, daily AI filter) |
 | `09_WebApp.gs` | `doGet`/`doPost` routing for the frontend |
 | `10_Helpers.gs` | Settings, dates, sheet utilities, logging |
 | `appsscript.json` | Apps Script manifest (timezone, webapp config) |

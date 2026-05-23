@@ -93,7 +93,7 @@ const APP = {
     max_results: 20,
     gemini_model: 'gemini-2.5-flash',
     daily_search_hour: 6,    // daily search runs ~06:00
-    weekly_filter_hour: 7    // weekly AI filter runs ~07:00 (margin after search)
+    weekly_filter_hour: 7    // daily AI filter hour (~07:00, margin after the 06:00 search)
   },
 
   PROPERTIES: {
@@ -153,7 +153,7 @@ const SETTINGS_SEED = [
   ['report_drive_folder_id', '', 'Drive folder ID where generated reports are saved — PASTE HERE'],
   ['report_template_doc_id', '', 'Google Doc ID of the report template — PASTE HERE'],
   ['daily_search_auto_run', 'true', 'Toggle the daily search trigger'],
-  ['weekly_filter_auto_run', 'true', 'Toggle the weekly AI filter trigger'],
+  ['weekly_filter_auto_run', 'true', 'Toggle the daily AI filter trigger (key name kept for backward compatibility)'],
   ['frontend_bearer_token', '', 'Random 32+ char token the frontend must send — PASTE HERE']
 ];
 
@@ -172,7 +172,7 @@ function onOpen() {
     .addItem('Create / repair project sheets', 'createProjectSheets')
     .addSeparator()
     .addItem('Run daily search now', 'runSearchNow')
-    .addItem('Run weekly AI filter now', 'runAIFilterNow')
+    .addItem('Run AI filter now', 'runAIFilterNow')
     .addSeparator()
     .addItem('Generate weekly report now', 'generateReportNow')
     .addItem('Archive & reset week', 'archiveWeekNow')
@@ -596,11 +596,18 @@ function stripJsonFences_(s) {
 
 /**************************************************************
  * TIPOLIS PRESS MONITOR — 04_AIFilter.gs
- * Weekly AI Filter. Enforces the Mon-Sun window, then asks Gemini
- * to classify each in-window row (relevance, category, country, region).
- * Processes in batches to stay within the 6-minute execution limit;
- * re-arms itself with a continuation trigger if work remains.
+ * Daily AI Filter. Classifies every search_results row whose
+ * FilterStatus is not Done (relevance, category, country, region),
+ * regardless of publish date. The Mon-Sun report window is applied
+ * at triage time, not here. Spaces Gemini calls by GEMINI_SPACING_MS
+ * to respect the free-tier RPM cap. Processes in batches to stay
+ * within the 6-minute execution limit; re-arms itself with a
+ * continuation trigger if work remains.
  **************************************************************/
+
+// ~6.5s between Gemini calls keeps us comfortably under the
+// free-tier rate limit (~10 RPM for gemini-2.5-flash).
+const GEMINI_SPACING_MS = 6500;
 
 function runAIFilterNow() {
   runAIFilter_();
@@ -623,7 +630,6 @@ function runAIFilter_() {
     const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
     if (last < 2) { log_('runAIFilter', 'No rows to filter.'); return; }
 
-    const window = getReportWindow_();
     const countriesList = getTipolisCountriesText_();
     const systemPrompt = buildFilterSystemPrompt_(countriesList);
 
@@ -638,14 +644,7 @@ function runAIFilter_() {
       const row = data[i];
       const rowNumber = i + 2;
       const status = String(row[C.FILTER_STATUS - 1] || '');
-      if (status === 'Done' || status === 'OutOfWindow') continue;
-
-      // Window check
-      const published = parseDateLoose_(row[C.PUBLISHED_AT - 1]);
-      if (!published || published < window.start || published > window.end) {
-        sheet.getRange(rowNumber, C.FILTER_STATUS).setValue('OutOfWindow');
-        continue;
-      }
+      if (status === 'Done') continue;
 
       // Time-budget guard: re-arm continuation if running low
       if (Date.now() - startTime > SAFE_MS) {
@@ -668,6 +667,7 @@ function runAIFilter_() {
         sheet.getRange(rowNumber, C.FILTER_STATUS).setValue('Done');
         processed++;
         if (processed % 10 === 0) SpreadsheetApp.flush();
+        Utilities.sleep(GEMINI_SPACING_MS);
       } catch (err) {
         sheet.getRange(rowNumber, C.FILTER_STATUS).setValue('Error');
         sheet.getRange(rowNumber, C.AI_REASON).setValue(truncate_(getErrorMessage_(err), 200));
@@ -676,7 +676,7 @@ function runAIFilter_() {
     }
     SpreadsheetApp.flush();
     removeTriggersByHandler_('runWeeklyAIFilter_continuation');
-    log_('runAIFilter', `Completed. Classified ${processed} in-window row(s).`);
+    log_('runAIFilter', `Completed. Classified ${processed} row(s).`);
   } finally {
     lock.releaseLock();
   }
@@ -1153,7 +1153,7 @@ function clearDataRows_(sheet, numCols) {
 
 /**************************************************************
  * TIPOLIS PRESS MONITOR — 08_Triggers.gs
- * Installs the daily search and weekly AI filter triggers.
+ * Installs the daily search and daily AI filter triggers.
  **************************************************************/
 
 function installAllTriggers() {
@@ -1165,16 +1165,17 @@ function installAllTriggers() {
   ScriptApp.newTrigger('runDailySearch')
     .timeBased().everyDays(1).atHour(APP.DEFAULTS.daily_search_hour).create();
 
-  // Weekly AI filter ~07:00 on Mondays (margin after the 06:00 search).
+  // Daily AI filter ~07:00 every day (margin after the 06:00 search).
+  // Handler name kept as runWeeklyAIFilter to avoid drift with the live
+  // deployment; the cadence change is in the trigger, not in the code.
   ScriptApp.newTrigger('runWeeklyAIFilter')
-    .timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY)
-    .atHour(APP.DEFAULTS.weekly_filter_hour).create();
+    .timeBased().everyDays(1).atHour(APP.DEFAULTS.weekly_filter_hour).create();
 
-  log_('installAllTriggers', 'Daily search + weekly AI filter triggers installed.');
+  log_('installAllTriggers', 'Daily search + daily AI filter triggers installed.');
   SpreadsheetApp.getUi().alert(
     'Triggers installed:\n' +
     `- Daily search ~${APP.DEFAULTS.daily_search_hour}:00\n` +
-    `- Weekly AI filter Mondays ~${APP.DEFAULTS.weekly_filter_hour}:00`
+    `- Daily AI filter ~${APP.DEFAULTS.weekly_filter_hour}:00`
   );
 }
 
@@ -1319,14 +1320,20 @@ function api_listTriage_(params) {
   const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
   if (last < 2) return [];
   const showRejected = params && params.showRejected === 'true';
+  const allDates = params && params.allDates === 'true';
+  const win = allDates ? null : getReportWindow_();
   const data = sheet.getRange(2, 1, last - 1, APP.HEADERS.RESULTS.length).getValues();
   const out = [];
   data.forEach((r, i) => {
     const status = String(r[C.FILTER_STATUS - 1] || '');
-    if (status !== 'Done') return;                     // only classified, in-window rows
+    if (status !== 'Done') return;                     // only classified rows
     const rel = String(r[C.AI_RELEVANCE - 1] || '');
     if (!showRejected && rel === 'reject') return;
     if (r[C.APPROVED - 1] === true) return;            // hide already-approved
+    if (win) {
+      const published = parseDateLoose_(r[C.PUBLISHED_AT - 1]);
+      if (!published || published < win.start || published > win.end) return;
+    }
     out.push({
       row: i + 2,
       term: r[C.TERM - 1], publishedAt: r[C.PUBLISHED_AT - 1], source: r[C.SOURCE - 1],

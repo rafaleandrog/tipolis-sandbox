@@ -45,6 +45,10 @@
         <button class="t-pill" data-filter="industry">Industry</button>
         <span class="pm-filter-row__label" style="margin-left:24px">View</span>
         <button class="t-pill" data-toggle-rejected aria-pressed="false">Show rejected</button>
+        <button class="t-pill" data-toggle-alldates aria-pressed="false"
+          title="By default the queue is limited to the current report window (previous Monday 00:00 → previous Sunday 23:59). Toggle on to see every classified row regardless of publish date.">
+          Show all dates
+        </button>
         <span class="pm-toolbar__spacer"></span>
         <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh</button>
       </div>
@@ -82,6 +86,7 @@
         items: [],
         filter: 'both',
         showRejected: false,
+        allDates: false,
         sessionApproved: 0,
         sessionRejected: 0
       };
@@ -182,8 +187,10 @@
         emptyEl.hidden = true;
         errorBox.hidden = true;
         try {
-          const params = state.showRejected ? { showRejected: 'true' } : null;
-          const data = await PM.apiGet('/triage', params);
+          const params = {};
+          if (state.showRejected) params.showRejected = 'true';
+          if (state.allDates) params.allDates = 'true';
+          const data = await PM.apiGet('/triage', Object.keys(params).length ? params : null);
           state.items = data || [];
           loading.hidden = true;
           render();
@@ -206,6 +213,14 @@
         state.showRejected = !state.showRejected;
         rejBtn.setAttribute('aria-pressed', String(state.showRejected));
         rejBtn.classList.toggle('is-active', state.showRejected);
+        load();
+      });
+
+      const allDatesBtn = document.querySelector('[data-toggle-alldates]');
+      allDatesBtn.addEventListener('click', () => {
+        state.allDates = !state.allDates;
+        allDatesBtn.setAttribute('aria-pressed', String(state.allDates));
+        allDatesBtn.classList.toggle('is-active', state.allDates);
         load();
       });
 

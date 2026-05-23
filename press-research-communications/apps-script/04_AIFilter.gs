@@ -1,10 +1,17 @@
 /**************************************************************
  * TIPOLIS PRESS MONITOR — 04_AIFilter.gs
- * Weekly AI Filter. Enforces the Mon-Sun window, then asks Gemini
- * to classify each in-window row (relevance, category, country, region).
- * Processes in batches to stay within the 6-minute execution limit;
- * re-arms itself with a continuation trigger if work remains.
+ * Daily AI Filter. Classifies every search_results row whose
+ * FilterStatus is not Done (relevance, category, country, region),
+ * regardless of publish date. The Mon-Sun report window is applied
+ * at triage time, not here. Spaces Gemini calls by GEMINI_SPACING_MS
+ * to respect the free-tier RPM cap. Processes in batches to stay
+ * within the 6-minute execution limit; re-arms itself with a
+ * continuation trigger if work remains.
  **************************************************************/
+
+// ~6.5s between Gemini calls keeps us comfortably under the
+// free-tier rate limit (~10 RPM for gemini-2.5-flash).
+const GEMINI_SPACING_MS = 6500;
 
 function runAIFilterNow() {
   runAIFilter_();
@@ -27,7 +34,6 @@ function runAIFilter_() {
     const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
     if (last < 2) { log_('runAIFilter', 'No rows to filter.'); return; }
 
-    const window = getReportWindow_();
     const countriesList = getTipolisCountriesText_();
     const systemPrompt = buildFilterSystemPrompt_(countriesList);
 
@@ -42,14 +48,7 @@ function runAIFilter_() {
       const row = data[i];
       const rowNumber = i + 2;
       const status = String(row[C.FILTER_STATUS - 1] || '');
-      if (status === 'Done' || status === 'OutOfWindow') continue;
-
-      // Window check
-      const published = parseDateLoose_(row[C.PUBLISHED_AT - 1]);
-      if (!published || published < window.start || published > window.end) {
-        sheet.getRange(rowNumber, C.FILTER_STATUS).setValue('OutOfWindow');
-        continue;
-      }
+      if (status === 'Done') continue;
 
       // Time-budget guard: re-arm continuation if running low
       if (Date.now() - startTime > SAFE_MS) {
@@ -72,6 +71,7 @@ function runAIFilter_() {
         sheet.getRange(rowNumber, C.FILTER_STATUS).setValue('Done');
         processed++;
         if (processed % 10 === 0) SpreadsheetApp.flush();
+        Utilities.sleep(GEMINI_SPACING_MS);
       } catch (err) {
         sheet.getRange(rowNumber, C.FILTER_STATUS).setValue('Error');
         sheet.getRange(rowNumber, C.AI_REASON).setValue(truncate_(getErrorMessage_(err), 200));
@@ -80,7 +80,7 @@ function runAIFilter_() {
     }
     SpreadsheetApp.flush();
     removeTriggersByHandler_('runWeeklyAIFilter_continuation');
-    log_('runAIFilter', `Completed. Classified ${processed} in-window row(s).`);
+    log_('runAIFilter', `Completed. Classified ${processed} row(s).`);
   } finally {
     lock.releaseLock();
   }

@@ -84,7 +84,9 @@ Your existing `search_terms` rows can stay. Change every term's `days` value to 
 
 Run `installAllTriggers` once (or use the Tipolis menu in the Sheet). This creates:
 - Daily search at ~06:00 every day.
-- Weekly AI filter on Mondays at ~07:00.
+- Daily AI filter at ~07:00 every day. (The handler function is still
+  named `runWeeklyAIFilter` for backward compatibility with deployed
+  scripts; the cadence change is in the trigger, not the function name.)
 
 ### C6. Deploy the Web App (for the frontend)
 
@@ -104,7 +106,7 @@ Whenever you change the Web App code, do **Deploy → Manage deployments → Edi
 You can exercise the whole pipeline from the Sheet menu, no frontend needed:
 
 1. **Tipolis → Run daily search now.** Rows appear in `search_results`.
-2. **Tipolis → Run weekly AI filter now.** The `ai_*` columns and `FilterStatus` fill in. (Out-of-window rows are tagged `OutOfWindow` and skipped.)
+2. **Tipolis → Run AI filter now.** The `ai_*` columns and `FilterStatus` fill in for every non-Done row, regardless of publish date. The Mon–Sun report window is applied later, at triage time.
 3. In `search_results`, tick the `Approved` checkbox on a few rows, then **Tipolis → (run) approveCheckedResultsNow** from the Apps Script editor. Rows move to `approved_news` and get AI bullets.
 4. **Tipolis → Generate weekly report now.** A Doc appears in Generated Reports. Open it and verify formatting.
 5. **Tipolis → Archive & reset week.** `approved_news` empties into `approved_history`; `search_results` clears; the week counter bumps.
@@ -157,20 +159,23 @@ Upload the files through the GitHub web UI (Add file → Upload files) or via gi
 
 ```
 Daily 06:00   → runDailySearch        → search_results (accumulates, URL-deduped)
-Monday 07:00  → runWeeklyAIFilter      → tags rows in the Mon-Sun window
-You (Monday)  → triage.html            → approve → approved_news + AI bullets
-You           → summary.html (wizard)  → edit bullets, Save & Next
-You           → report.html            → Generate Report → Doc in Drive
-You           → Archive & Reset        → approved_history; clears week
-Anytime       → history.html           → browse archived news by country
+Daily 07:00   → runWeeklyAIFilter     → classifies every non-Done row (no date filter)
+You (Monday)  → triage.html           → approve → approved_news + AI bullets
+                                        (queue is limited to the current Mon-Sun
+                                        window by default; toggle "Show all dates"
+                                        to see urgent items outside the window)
+You           → summary.html (wizard) → edit bullets, Save & Next
+You           → report.html           → Generate Report → Doc in Drive
+You           → Archive & Reset       → approved_history; clears week
+Anytime       → history.html          → browse archived news by country
 ```
 
 ---
 
 ## Operating notes
 
-- **Week window:** a report dated on a Monday covers the previous Monday 00:00 to the previous Sunday 23:59. News from Monday morning (before the filter runs) lands in next week's report, never the current one.
+- **Week window:** a report dated on a Monday covers the previous Monday 00:00 to the previous Sunday 23:59. The window is enforced at triage time, not in the filter — the AI classifies every new row daily so urgent items are visible mid-week (use the "Show all dates" toggle on the Triage screen).
 - **Year boundary:** at year change, edit `last_report_week_number` manually (e.g. set to `0` so the next report is Week 1).
 - **Backfill a missed day:** if a daily search failed, just run "Run daily search now" — the 24h window plus URL-dedup makes it safe to re-run.
-- **Gemini limits:** if the AI filter ever hits rate limits, it logs HTTP 429 and retries; for very large weeks it processes in batches and re-arms itself automatically.
+- **Gemini limits:** the filter spaces calls by ~6.5s (`GEMINI_SPACING_MS`) to stay under the free-tier ~10 RPM cap; if it hits 429 anyway it logs the response and retries once. For days with a large backlog it processes in batches and re-arms itself with a continuation trigger automatically.
 - **Changing report styling:** edit the template Google Doc once; all future reports inherit the change. Never edit styling in code.
