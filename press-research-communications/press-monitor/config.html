@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Config — Press Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Jost:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/css/tipolis-design-system.css">
+  <link rel="stylesheet" href="../../assets/css/style.css">
+  <link rel="stylesheet" href="./assets/css/main.css">
+</head>
+<body class="page--press-research-communications">
+  <nav class="t-nav pm-nav" data-nav aria-label="Press Monitor sections"></nav>
+
+  <main class="t-main">
+    <header class="t-hero">
+      <span class="t-hero__overline">Setup</span>
+      <h1 class="t-hero__title">Config.</h1>
+      <p class="t-hero__lead">Search terms, priority countries, and manual triggers. Saves to the sheet replace the entire list — always send the full table.</p>
+    </header>
+
+    <div class="pm-filter-row" role="tablist">
+      <button class="t-pill is-active" data-tab="terms" role="tab" aria-selected="true">Terms</button>
+      <button class="t-pill" data-tab="countries" role="tab" aria-selected="false">Countries</button>
+      <button class="t-pill" data-tab="actions" role="tab" aria-selected="false">Actions</button>
+    </div>
+
+    <!-- TERMS TAB -->
+    <section data-panel="terms">
+      <div class="pm-toolbar">
+        <button class="pm-btn pm-btn--ghost" data-action="add-term">+ Add term</button>
+        <span class="pm-toolbar__spacer"></span>
+        <span class="pm-toolbar__status" data-status-terms></span>
+        <button class="pm-btn pm-btn--primary" data-action="save-terms">Save terms</button>
+      </div>
+
+      <div data-error-terms class="pm-error" hidden></div>
+      <div data-loading-terms class="pm-loading">Loading terms</div>
+
+      <div data-terms-wrap hidden>
+        <table class="pm-editable-table">
+          <thead>
+            <tr>
+              <th>Term</th><th>Enabled</th><th>Days</th><th>Match</th>
+              <th>Case-sensitive</th><th>Language</th><th>Country</th><th>Max</th><th></th>
+            </tr>
+          </thead>
+          <tbody data-rows-terms></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- COUNTRIES TAB -->
+    <section data-panel="countries" hidden>
+      <div class="pm-toolbar">
+        <button class="pm-btn pm-btn--ghost" data-action="add-country">+ Add country</button>
+        <span class="pm-toolbar__spacer"></span>
+        <span class="pm-toolbar__status" data-status-countries></span>
+        <button class="pm-btn pm-btn--primary" data-action="save-countries">Save countries</button>
+      </div>
+
+      <div data-error-countries class="pm-error" hidden></div>
+      <div data-loading-countries class="pm-loading">Loading countries</div>
+
+      <div data-countries-wrap hidden>
+        <table class="pm-editable-table">
+          <thead>
+            <tr>
+              <th>Country</th><th>Region</th><th>Priority</th><th>Projects</th><th>Notes</th><th></th>
+            </tr>
+          </thead>
+          <tbody data-rows-countries></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ACTIONS TAB -->
+    <section data-panel="actions" hidden>
+      <p class="t-lead">Manual triggers. Both calls can take several minutes — the backend keeps running even if the browser timeout drops the response. Results appear on the Triage screen.</p>
+
+      <div class="pm-card" style="margin-bottom:14px">
+        <div class="pm-readonly-grid__label">Daily search</div>
+        <p class="t-body">Fetches the last 24h of news for every enabled term, dedups by URL against search_results + approved_history, appends new rows. Normally runs automatically at ~06:00.</p>
+        <div class="pm-toolbar" style="margin-top:10px">
+          <span class="pm-slow-note">Can take 1–3 minutes</span>
+          <span class="pm-toolbar__spacer"></span>
+          <button class="pm-btn pm-btn--primary" data-action="run-search">Run search now</button>
+        </div>
+      </div>
+
+      <div class="pm-card">
+        <div class="pm-readonly-grid__label">AI classification</div>
+        <p class="t-body">Classifies every non-Done row with Gemini (relevance, category, country, region). Spaces calls by ~6.5s to respect the free-tier rate limit. Normally runs automatically at ~07:00.</p>
+        <div class="pm-toolbar" style="margin-top:10px">
+          <span class="pm-slow-note">Can take several minutes on large backlogs</span>
+          <span class="pm-toolbar__spacer"></span>
+          <button class="pm-btn pm-btn--primary" data-action="run-filter">Run AI classification now</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="./js/api.js"></script>
+  <script>
+    (function () {
+      if (!PM.requireToken()) return;
+      PM.mountNav('config');
+
+      // --- Tab switching --------------------------------------------------
+
+      const tabBtns = document.querySelectorAll('[data-tab]');
+      const panels = {
+        terms: document.querySelector('[data-panel="terms"]'),
+        countries: document.querySelector('[data-panel="countries"]'),
+        actions: document.querySelector('[data-panel="actions"]')
+      };
+      let activeTab = 'terms';
+      function switchTo(name) {
+        activeTab = name;
+        tabBtns.forEach(b => {
+          const on = b.dataset.tab === name;
+          b.classList.toggle('is-active', on);
+          b.setAttribute('aria-selected', String(on));
+        });
+        Object.keys(panels).forEach(k => { panels[k].hidden = k !== name; });
+        if (name === 'countries' && !countriesLoaded) loadCountries();
+      }
+      tabBtns.forEach(b => b.addEventListener('click', () => switchTo(b.dataset.tab)));
+
+      // --- Terms ----------------------------------------------------------
+
+      const termsStatus = document.querySelector('[data-status-terms]');
+      const termsError = document.querySelector('[data-error-terms]');
+      const termsLoading = document.querySelector('[data-loading-terms]');
+      const termsWrap = document.querySelector('[data-terms-wrap]');
+      const termsHost = document.querySelector('[data-rows-terms]');
+
+      function termRow(t) {
+        t = t || {};
+        const tr = PM.el('tr');
+        const cell = (label, child) => PM.el('td', { dataset: { label } }, [child]);
+
+        const term = PM.el('input', { type: 'text', value: t.term || '', placeholder: 'e.g. "free zone Honduras"' });
+        const enabled = PM.el('input', { type: 'checkbox' }); enabled.checked = t.enabled === true;
+        const days = PM.el('input', { type: 'number', min: '1', max: '30', value: String(t.days || 1) });
+        const match = PM.el('select', null, [PM.el('option', { value: 'broad' }, ['broad']), PM.el('option', { value: 'exact' }, ['exact'])]);
+        match.value = (t.match_type === 'exact') ? 'exact' : 'broad';
+        const cs = PM.el('input', { type: 'checkbox' }); cs.checked = t.case_sensitive === true;
+        const lang = PM.el('input', { type: 'text', value: t.language || 'en', placeholder: 'en', maxlength: '5' });
+        const country = PM.el('input', { type: 'text', value: t.country || '', placeholder: 'US, BR, …', maxlength: '4' });
+        const maxR = PM.el('input', { type: 'number', min: '1', max: '100', value: String(t.max_results || 20) });
+        const remove = PM.el('button', { class: 'pm-btn pm-btn--danger pm-btn--icon', onClick: () => tr.remove() }, ['Delete']);
+
+        tr.appendChild(cell('Term', term));
+        tr.appendChild(cell('Enabled', PM.el('div', { class: 'pm-cell--center' }, [enabled])));
+        tr.appendChild(cell('Days', days));
+        tr.appendChild(cell('Match', match));
+        tr.appendChild(cell('Case', PM.el('div', { class: 'pm-cell--center' }, [cs])));
+        tr.appendChild(cell('Language', lang));
+        tr.appendChild(cell('Country', country));
+        tr.appendChild(cell('Max', maxR));
+        tr.appendChild(cell('', remove));
+
+        tr._read = () => ({
+          term: term.value.trim(),
+          enabled: enabled.checked,
+          days: Number(days.value) || 1,
+          match_type: match.value,
+          case_sensitive: cs.checked,
+          language: lang.value.trim() || 'en',
+          country: country.value.trim().toUpperCase(),
+          max_results: Number(maxR.value) || 20
+        });
+        return tr;
+      }
+
+      async function loadTerms() {
+        try {
+          const data = await PM.apiGet('/terms');
+          termsHost.innerHTML = '';
+          (data || []).forEach(t => termsHost.appendChild(termRow(t)));
+          if (!data.length) termsHost.appendChild(termRow());
+          termsLoading.hidden = true;
+          termsWrap.hidden = false;
+        } catch (err) {
+          termsLoading.hidden = true;
+          if (err.name !== 'Unauthorized') { termsError.textContent = err.message; termsError.hidden = false; }
+        }
+      }
+
+      document.querySelector('[data-action="add-term"]').addEventListener('click', () => {
+        termsHost.appendChild(termRow());
+      });
+
+      document.querySelector('[data-action="save-terms"]').addEventListener('click', async () => {
+        const terms = Array.from(termsHost.children).map(tr => tr._read()).filter(t => t.term);
+        PM.showStatus(termsStatus, 'saving', 'Saving…');
+        try {
+          const res = await PM.apiPost('/terms', { terms });
+          PM.showStatus(termsStatus, 'saved', 'Saved · ' + res.saved + ' rows');
+          PM.toast('Terms saved (' + res.saved + ')', 'success');
+        } catch (err) {
+          if (err.name !== 'Unauthorized') { PM.showStatus(termsStatus, 'error', err.message); PM.toast(err.message, 'error'); }
+        }
+      });
+
+      // --- Countries ------------------------------------------------------
+
+      const countriesStatus = document.querySelector('[data-status-countries]');
+      const countriesError = document.querySelector('[data-error-countries]');
+      const countriesLoading = document.querySelector('[data-loading-countries]');
+      const countriesWrap = document.querySelector('[data-countries-wrap]');
+      const countriesHost = document.querySelector('[data-rows-countries]');
+      let countriesLoaded = false;
+
+      const REGIONS = ['Africa','Caribbean','Latin America','North America','Europe',
+        'Middle East','South Asia','Southeast Asia','East Asia','Oceania','Global'];
+      const PRIORITIES = ['high', 'medium', 'low'];
+
+      function countryRow(c) {
+        c = c || {};
+        const tr = PM.el('tr');
+        const cell = (label, child) => PM.el('td', { dataset: { label } }, [child]);
+
+        const name = PM.el('input', { type: 'text', value: c.country_name || '', placeholder: 'Honduras' });
+        const region = PM.el('select', null,
+          [PM.el('option', { value: '' }, ['(none)'])].concat(REGIONS.map(r => PM.el('option', { value: r }, [r]))));
+        region.value = c.region || '';
+        const priority = PM.el('select', null,
+          [PM.el('option', { value: '' }, ['(none)'])].concat(PRIORITIES.map(p => PM.el('option', { value: p }, [p]))));
+        priority.value = c.priority_level || '';
+        const projects = PM.el('input', { type: 'text', value: c.project_names || '', placeholder: 'Próspera, ZEDE' });
+        const notes = PM.el('input', { type: 'text', value: c.notes || '' });
+        const remove = PM.el('button', { class: 'pm-btn pm-btn--danger pm-btn--icon', onClick: () => tr.remove() }, ['Delete']);
+
+        tr.appendChild(cell('Country', name));
+        tr.appendChild(cell('Region', region));
+        tr.appendChild(cell('Priority', priority));
+        tr.appendChild(cell('Projects', projects));
+        tr.appendChild(cell('Notes', notes));
+        tr.appendChild(cell('', remove));
+
+        tr._read = () => ({
+          country_name: name.value.trim(),
+          region: region.value,
+          priority_level: priority.value,
+          project_names: projects.value.trim(),
+          notes: notes.value.trim()
+        });
+        return tr;
+      }
+
+      async function loadCountries() {
+        try {
+          const data = await PM.apiGet('/countries');
+          countriesHost.innerHTML = '';
+          (data || []).forEach(c => countriesHost.appendChild(countryRow(c)));
+          if (!data.length) countriesHost.appendChild(countryRow());
+          countriesLoading.hidden = true;
+          countriesWrap.hidden = false;
+          countriesLoaded = true;
+        } catch (err) {
+          countriesLoading.hidden = true;
+          if (err.name !== 'Unauthorized') { countriesError.textContent = err.message; countriesError.hidden = false; }
+        }
+      }
+
+      document.querySelector('[data-action="add-country"]').addEventListener('click', () => {
+        countriesHost.appendChild(countryRow());
+      });
+
+      document.querySelector('[data-action="save-countries"]').addEventListener('click', async () => {
+        const countries = Array.from(countriesHost.children).map(tr => tr._read()).filter(c => c.country_name);
+        PM.showStatus(countriesStatus, 'saving', 'Saving…');
+        try {
+          const res = await PM.apiPost('/countries', { countries });
+          PM.showStatus(countriesStatus, 'saved', 'Saved · ' + res.saved + ' rows');
+          PM.toast('Countries saved (' + res.saved + ')', 'success');
+        } catch (err) {
+          if (err.name !== 'Unauthorized') { PM.showStatus(countriesStatus, 'error', err.message); PM.toast(err.message, 'error'); }
+        }
+      });
+
+      // --- Actions (slow) -------------------------------------------------
+
+      document.querySelector('[data-action="run-search"]').addEventListener('click', (e) => {
+        PM.runSlow(e.currentTarget, async () => {
+          return await PM.apiPost('/search/run', null, { timeoutMs: PM.SLOW_TIMEOUT_MS });
+        }, {
+          runningLabel: 'Running search… this can take a few minutes',
+          successMessage: 'Search started — new rows will appear on Triage'
+        });
+      });
+
+      document.querySelector('[data-action="run-filter"]').addEventListener('click', (e) => {
+        PM.runSlow(e.currentTarget, async () => {
+          return await PM.apiPost('/filter/run', null, { timeoutMs: PM.SLOW_TIMEOUT_MS });
+        }, {
+          runningLabel: 'Running classification… this can take a few minutes',
+          successMessage: 'Classification started — refresh Triage to see results'
+        });
+      });
+
+      loadTerms();
+    })();
+  </script>
+</body>
+</html>

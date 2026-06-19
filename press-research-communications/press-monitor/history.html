@@ -12,27 +12,16 @@
   <link rel="stylesheet" href="./assets/css/main.css">
 </head>
 <body class="page--press-research-communications">
-  <nav class="t-nav pm-nav" aria-label="Press Monitor sections">
-    <a class="t-nav__brand" href="../">
-      <span>Tipolis · Press Monitor</span>
-    </a>
-    <div class="t-nav__items">
-      <a class="t-pill" href="./">Hub</a>
-      <a class="t-pill" href="./terms.html">Terms</a>
-      <a class="t-pill" href="./triage.html">Triage</a>
-      <a class="t-pill" href="./summary.html">Summary</a>
-      <a class="t-pill" href="./report.html">Report</a>
-      <a class="t-pill is-active" href="./history.html" aria-current="page">History</a>
-    </div>
-  </nav>
+  <nav class="t-nav pm-nav" data-nav aria-label="Press Monitor sections"></nav>
 
   <main class="t-main">
     <header class="t-hero">
       <span class="t-hero__overline">Archive</span>
       <h1 class="t-hero__title">History. <span>Grouped by country.</span></h1>
-      <p class="t-hero__lead">Every archived article sits here forever. Click a country to drill into its articles with rendered bullets.</p>
+      <p class="t-hero__lead">Every archived article sits here forever. Pick a country to drill into its articles with the final bullets as they appeared in the report.</p>
     </header>
 
+    <!-- COUNTRIES INDEX -->
     <section data-view="countries">
       <div class="pm-filter-row">
         <span class="pm-filter-row__label">Region</span>
@@ -47,6 +36,7 @@
       <div class="pm-history-grid" data-grid></div>
     </section>
 
+    <!-- DRILL-DOWN -->
     <section data-view="articles" hidden>
       <div class="pm-toolbar">
         <button class="pm-btn pm-btn--ghost" data-action="back">← Back to countries</button>
@@ -64,10 +54,12 @@
     </section>
   </main>
 
-  <script src="./assets/js/config.js"></script>
-  <script src="./assets/js/api.js"></script>
+  <script src="./js/api.js"></script>
   <script>
     (function () {
+      if (!PM.requireToken()) return;
+      PM.mountNav('history');
+
       const views = {
         countries: document.querySelector('[data-view="countries"]'),
         articles: document.querySelector('[data-view="articles"]')
@@ -104,10 +96,7 @@
         const filtered = state.region
           ? state.countries.filter(c => c.region === state.region)
           : state.countries;
-        if (!filtered.length) {
-          emptyEl.hidden = false;
-          return;
-        }
+        if (!filtered.length) { emptyEl.hidden = false; return; }
         emptyEl.hidden = true;
         filtered.forEach(c => grid.appendChild(buildCountryCard(c)));
       }
@@ -132,7 +121,7 @@
           renderCountries();
         } catch (err) {
           loading.hidden = true;
-          showError(err.message);
+          if (err.name !== 'Unauthorized') showError(err.message);
         }
       }
 
@@ -188,7 +177,7 @@
             .forEach(a => articlesHost.appendChild(buildArticle(a)));
         } catch (err) {
           articlesState.hidden = false;
-          articlesState.textContent = err.message;
+          articlesState.textContent = err.name === 'Unauthorized' ? '' : err.message;
         }
       }
 

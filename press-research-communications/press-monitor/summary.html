@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Summary editor — Press Monitor</title>
+  <title>Summaries — Press Monitor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Jost:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -12,134 +12,52 @@
   <link rel="stylesheet" href="./assets/css/main.css">
 </head>
 <body class="page--press-research-communications">
-  <nav class="t-nav pm-nav" aria-label="Press Monitor sections">
-    <a class="t-nav__brand" href="../">
-      <span>Tipolis · Press Monitor</span>
-    </a>
-    <div class="t-nav__items">
-      <a class="t-pill" href="./">Hub</a>
-      <a class="t-pill" href="./terms.html">Terms</a>
-      <a class="t-pill" href="./triage.html">Triage</a>
-      <a class="t-pill is-active" href="./summary.html" aria-current="page">Summary</a>
-      <a class="t-pill" href="./report.html">Report</a>
-      <a class="t-pill" href="./history.html">History</a>
-    </div>
-  </nav>
+  <nav class="t-nav pm-nav" data-nav aria-label="Press Monitor sections"></nav>
 
   <main class="t-main">
     <header class="t-hero">
       <span class="t-hero__overline">Step 2 · Edit</span>
-      <h1 class="t-hero__title">Summary editor. <span>One article at a time.</span></h1>
-      <p class="t-hero__lead">Tipolis bullets are 14–22 words, factual, single-sentence, with at most one inline link. Trim the AI draft to 3–5 bullets before moving on.</p>
+      <h1 class="t-hero__title">Summaries.</h1>
+      <p class="t-hero__lead">The AI drafts 6–10 bullets per article; trim each to a tight 3–5. Edit the headline and bullets, fix country/region/category, drag cards to set the order they appear in the report.</p>
     </header>
 
     <section>
+      <div class="pm-toolbar">
+        <span class="pm-legend">
+          Markdown: <code>**bold**</code> <code>*italic*</code> <code>[text](url)</code>
+        </span>
+        <span class="pm-toolbar__spacer"></span>
+        <span class="pm-toolbar__status" data-order-status></span>
+        <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh</button>
+      </div>
+
       <div data-error class="pm-error" hidden></div>
       <div data-state="loading" class="pm-loading">Loading approved items</div>
-      <div data-empty class="pm-empty" hidden>No approved items in this week's queue. Approve some on the Triage screen first.</div>
-
-      <div data-wizard hidden>
-        <div class="pm-wizard__progress">
-          <span class="pm-wizard__progress-label" data-progress>0 of 0</span>
-          <h2 class="pm-wizard__progress-title" data-title></h2>
-        </div>
-
-        <div class="pm-card">
-          <div class="pm-readonly-grid">
-            <div>
-              <div class="pm-readonly-grid__label">Source</div>
-              <div class="pm-readonly-grid__value" data-source></div>
-            </div>
-            <div>
-              <div class="pm-readonly-grid__label">Published</div>
-              <div class="pm-readonly-grid__value" data-published></div>
-            </div>
-            <div>
-              <div class="pm-readonly-grid__label">Link</div>
-              <div class="pm-readonly-grid__value" data-link></div>
-            </div>
-            <div>
-              <div class="pm-readonly-grid__label">AI status</div>
-              <div class="pm-readonly-grid__value" data-ai-status></div>
-            </div>
-          </div>
-          <div class="pm-readonly-grid">
-            <div>
-              <div class="pm-readonly-grid__label">Country</div>
-              <input class="pm-headline-input" data-country type="text">
-            </div>
-            <div>
-              <div class="pm-readonly-grid__label">Region</div>
-              <select class="pm-headline-input" data-region>
-                <option value="">(none)</option>
-                <option>Africa</option><option>Caribbean</option><option>Latin America</option>
-                <option>North America</option><option>Europe</option><option>Middle East</option>
-                <option>South Asia</option><option>Southeast Asia</option><option>East Asia</option>
-                <option>Oceania</option><option>Global</option>
-              </select>
-            </div>
-            <div>
-              <div class="pm-readonly-grid__label">Category</div>
-              <select class="pm-headline-input" data-category>
-                <option value="tipolis">tipolis</option>
-                <option value="industry">industry</option>
-              </select>
-            </div>
-            <div>
-              <div class="pm-readonly-grid__label">Original description</div>
-              <div class="pm-readonly-grid__value" data-description style="max-height:120px; overflow:auto;"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="pm-card" data-pending hidden>
-          <p class="pm-loading">Generating AI summary</p>
-          <div class="pm-toolbar">
-            <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh</button>
-          </div>
-        </div>
-
-        <div class="pm-card" data-editor>
-          <div class="pm-readonly-grid__label" style="margin-bottom:6px">Headline line (markdown)</div>
-          <textarea class="pm-headline-input" data-headline rows="2"
-            placeholder="Source: [**Headline**](URL)"></textarea>
-
-          <div class="pm-readonly-grid__label" style="margin:14px 0 6px">Bullets</div>
-          <div data-bullets></div>
-          <button class="pm-bullet-add" data-action="add-bullet">+ Add bullet</button>
-        </div>
-
-        <div class="pm-toolbar" style="margin-top:18px">
-          <button class="pm-btn pm-btn--ghost" data-action="prev">← Previous</button>
-          <span class="pm-toolbar__spacer"></span>
-          <span class="pm-toolbar__status" data-status></span>
-          <button class="pm-btn pm-btn--primary" data-action="save-next">Save &amp; next</button>
-        </div>
-      </div>
+      <div data-empty class="pm-empty" hidden>No approved items yet. Approve some on the Triage screen first.</div>
+      <div data-list></div>
     </section>
   </main>
 
-  <script src="./assets/js/config.js"></script>
-  <script src="./assets/js/api.js"></script>
+  <script src="./js/api.js"></script>
   <script>
     (function () {
+      if (!PM.requireToken()) return;
+      PM.mountNav('summary');
+
       const errorBox = document.querySelector('[data-error]');
       const loading = document.querySelector('[data-state="loading"]');
       const emptyEl = document.querySelector('[data-empty]');
-      const wizard = document.querySelector('[data-wizard]');
-      const status = document.querySelector('[data-status]');
-      const pendingPanel = document.querySelector('[data-pending]');
-      const editorPanel = document.querySelector('[data-editor]');
-      const bulletsHost = document.querySelector('[data-bullets]');
+      const listEl = document.querySelector('[data-list]');
+      const orderStatus = document.querySelector('[data-order-status]');
 
-      const state = { items: [], index: 0 };
+      const REGIONS = ['Africa','Caribbean','Latin America','North America','Europe',
+        'Middle East','South Asia','Southeast Asia','East Asia','Oceania','Global'];
+
+      const state = { items: [] };
 
       function showError(msg) { errorBox.textContent = msg; errorBox.hidden = false; }
 
-      function autoResize(el) {
-        el.style.height = 'auto';
-        el.style.height = (el.scrollHeight + 2) + 'px';
-      }
+      function autoResize(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
 
       function buildBulletRow(text) {
         const handle = PM.el('div', { class: 'pm-bullet-row__handle', draggable: 'true', title: 'Drag to reorder' }, ['⋮⋮']);
@@ -157,8 +75,8 @@
           e.dataTransfer.setData('text/plain', 'bullet');
         });
         handle.addEventListener('dragend', () => row.classList.remove('is-dragging'));
-
         row.addEventListener('dragover', e => {
+          if (!row.parentNode.querySelector('.pm-bullet-row.is-dragging')) return;
           e.preventDefault();
           row.classList.add('is-drop-target');
         });
@@ -166,7 +84,7 @@
         row.addEventListener('drop', e => {
           e.preventDefault();
           row.classList.remove('is-drop-target');
-          const dragging = bulletsHost.querySelector('.is-dragging');
+          const dragging = row.parentNode.querySelector('.pm-bullet-row.is-dragging');
           if (dragging && dragging !== row) {
             const rect = row.getBoundingClientRect();
             const before = (e.clientY - rect.top) < rect.height / 2;
@@ -178,125 +96,162 @@
         return row;
       }
 
-      function renderItem() {
-        const item = state.items[state.index];
-        if (!item) return;
-        document.querySelector('[data-progress]').textContent =
-          (state.index + 1) + ' of ' + state.items.length;
-        document.querySelector('[data-title]').textContent = item.title || '(untitled)';
-        document.querySelector('[data-source]').textContent = item.source || '';
-        document.querySelector('[data-published]').textContent = PM.formatDate(item.publishedAt);
-        const linkEl = document.querySelector('[data-link]');
-        linkEl.innerHTML = '';
-        if (item.link) {
-          linkEl.appendChild(PM.el('a', { href: item.link, target: '_blank', rel: 'noopener' }, ['Open original ↗']));
+      function buildCard(item) {
+        const handle = PM.el('div', { class: 'pm-summary-card__handle', draggable: 'true', title: 'Drag to reorder items' }, ['⠿']);
+
+        const titleLink = item.link
+          ? PM.el('a', { href: item.link, target: '_blank', rel: 'noopener' }, [item.title || '(untitled)'])
+          : (item.title || '(untitled)');
+        const title = PM.el('div', { class: 'pm-summary-card__title' }, [titleLink]);
+        const sub = PM.el('div', { class: 'pm-summary-card__sub' }, [
+          item.source ? PM.el('span', null, [item.source]) : null,
+          item.publishedAt ? PM.el('span', null, [PM.formatDate(item.publishedAt)]) : null
+        ]);
+        const titleWrap = PM.el('div', null, [title, sub]);
+
+        const badge = PM.el('span', { class: 'pm-status-badge', dataset: { status: String(item.aiStatus || '') } },
+          [String(item.aiStatus || '—')]);
+
+        const head = PM.el('div', { class: 'pm-summary-card__head' }, [handle, titleWrap, badge]);
+
+        // Editable country / region / category
+        const country = PM.el('input', { class: 'pm-headline-input', type: 'text', value: item.country || '' });
+        const region = PM.el('select', { class: 'pm-headline-input' },
+          [PM.el('option', { value: '' }, ['(none)'])].concat(REGIONS.map(r => PM.el('option', { value: r }, [r]))));
+        region.value = item.region || '';
+        const category = PM.el('select', { class: 'pm-headline-input' }, [
+          PM.el('option', { value: 'tipolis' }, ['tipolis']),
+          PM.el('option', { value: 'industry' }, ['industry'])
+        ]);
+        category.value = item.category || 'tipolis';
+
+        function field(label, node) {
+          return PM.el('div', null, [
+            PM.el('div', { class: 'pm-readonly-grid__label' }, [label]), node
+          ]);
         }
-        document.querySelector('[data-ai-status]').textContent = item.aiStatus || '';
-        document.querySelector('[data-description]').textContent = item.description || '';
-        document.querySelector('[data-country]').value = item.country || '';
-        document.querySelector('[data-region]').value = item.region || '';
-        document.querySelector('[data-category]').value = item.category || 'tipolis';
+        const metaGrid = PM.el('div', { class: 'pm-readonly-grid' }, [
+          field('Country', country), field('Region', region), field('Category', category)
+        ]);
 
-        if (item.aiStatus !== 'Done') {
-          pendingPanel.hidden = false;
-          editorPanel.hidden = true;
-        } else {
-          pendingPanel.hidden = true;
-          editorPanel.hidden = false;
-        }
+        // Headline
+        const headline = PM.el('textarea', { class: 'pm-headline-input', rows: '2',
+          placeholder: 'Source: [**Headline**](URL)' });
+        headline.value = item.headline_line || '';
+        setTimeout(() => autoResize(headline), 0);
+        headline.addEventListener('input', () => autoResize(headline));
+        const headlineField = PM.el('div', null, [
+          PM.el('div', { class: 'pm-readonly-grid__label', style: 'margin:12px 0 6px' }, ['Headline line']),
+          headline
+        ]);
 
-        const head = document.querySelector('[data-headline]');
-        head.value = item.headline_line || '';
-        setTimeout(() => autoResize(head), 0);
+        // Bullets
+        const bulletsHost = PM.el('div', null, (item.bullets || []).map(b => buildBulletRow(b)));
+        const addBtn = PM.el('button', { class: 'pm-bullet-add' }, ['+ Add bullet']);
+        addBtn.addEventListener('click', () => {
+          const r = buildBulletRow('');
+          bulletsHost.appendChild(r);
+          r.querySelector('textarea').focus();
+        });
+        const bulletsLabel = PM.el('div', { class: 'pm-readonly-grid__label', style: 'margin:12px 0 6px' }, ['Bullets']);
 
-        bulletsHost.innerHTML = '';
-        (item.bullets || []).forEach(b => bulletsHost.appendChild(buildBulletRow(b)));
+        // Footer
+        const saveBtn = PM.el('button', { class: 'pm-btn pm-btn--primary' }, ['Save']);
+        const status = PM.el('span', { class: 'pm-toolbar__status' }, ['']);
+        const footer = PM.el('div', { class: 'pm-toolbar', style: 'margin-top:12px' }, [
+          PM.el('span', { class: 'pm-toolbar__spacer' }), status, saveBtn
+        ]);
 
-        const isLast = state.index === state.items.length - 1;
-        document.querySelector('[data-action="save-next"]').textContent = isLast ? 'Save & finish' : 'Save & next';
-        document.querySelector('[data-action="prev"]').disabled = state.index === 0;
+        const card = PM.el('article', { class: 'pm-summary-card', dataset: { row: String(item.row) } },
+          [head, metaGrid, headlineField, bulletsLabel, bulletsHost, addBtn, footer]);
+
+        saveBtn.addEventListener('click', async () => {
+          const bullets = Array.from(bulletsHost.children)
+            .map(r => r._read()).map(s => String(s || '').trim()).filter(Boolean);
+          saveBtn.disabled = true;
+          PM.showStatus(status, 'saving', 'Saving…');
+          try {
+            await PM.apiPost('/summary/save', {
+              row: item.row,
+              headline_line: headline.value,
+              bullets,
+              country: country.value,
+              region: region.value,
+              category: category.value
+            });
+            Object.assign(item, {
+              headline_line: headline.value, bullets,
+              country: country.value, region: region.value, category: category.value
+            });
+            PM.showStatus(status, 'saved', 'Saved ✓');
+          } catch (err) {
+            if (err.name !== 'Unauthorized') { PM.showStatus(status, 'error', err.message); PM.toast(err.message, 'error'); }
+          } finally {
+            saveBtn.disabled = false;
+          }
+        });
+
+        // Card-level drag reorder via the handle
+        handle.addEventListener('dragstart', e => {
+          card.classList.add('is-dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(item.row));
+        });
+        handle.addEventListener('dragend', () => { card.classList.remove('is-dragging'); persistOrder(); });
+        card.addEventListener('dragover', e => {
+          const dragging = listEl.querySelector('.pm-summary-card.is-dragging');
+          if (!dragging || dragging === card) return;
+          e.preventDefault();
+          card.classList.add('is-drop-target');
+        });
+        card.addEventListener('dragleave', () => card.classList.remove('is-drop-target'));
+        card.addEventListener('drop', e => {
+          e.preventDefault();
+          card.classList.remove('is-drop-target');
+          const dragging = listEl.querySelector('.pm-summary-card.is-dragging');
+          if (!dragging || dragging === card) return;
+          const rect = card.getBoundingClientRect();
+          const before = (e.clientY - rect.top) < rect.height / 2;
+          listEl.insertBefore(dragging, before ? card : card.nextSibling);
+        });
+
+        return card;
       }
 
-      async function load(keepIndex) {
+      async function persistOrder() {
+        const order = Array.from(listEl.querySelectorAll('.pm-summary-card')).map(c => Number(c.dataset.row));
+        if (!order.length) return;
+        PM.showStatus(orderStatus, 'saving', 'Saving order…');
+        try {
+          await PM.apiPost('/summary/reorder', { order });
+          PM.showStatus(orderStatus, 'saved', 'Order saved ✓');
+        } catch (err) {
+          if (err.name !== 'Unauthorized') PM.showStatus(orderStatus, 'error', err.message);
+        }
+      }
+
+      function render() {
+        listEl.innerHTML = '';
+        state.items.forEach(item => listEl.appendChild(buildCard(item)));
+      }
+
+      async function load() {
         loading.hidden = false;
         emptyEl.hidden = true;
-        wizard.hidden = true;
         errorBox.hidden = true;
         try {
           const data = await PM.apiGet('/summary');
           loading.hidden = true;
           state.items = data || [];
-          if (!state.items.length) {
-            emptyEl.hidden = false;
-            return;
-          }
-          if (!keepIndex) state.index = 0;
-          wizard.hidden = false;
-          renderItem();
+          if (!state.items.length) { emptyEl.hidden = false; return; }
+          render();
         } catch (err) {
           loading.hidden = true;
-          showError(err.message);
+          if (err.name !== 'Unauthorized') showError(err.message);
         }
       }
 
-      async function saveCurrent() {
-        const item = state.items[state.index];
-        if (!item) return;
-        const headline = document.querySelector('[data-headline]').value;
-        const bullets = Array.from(bulletsHost.children)
-          .map(row => row._read())
-          .map(s => String(s || '').trim())
-          .filter(Boolean);
-        const country = document.querySelector('[data-country]').value;
-        const region = document.querySelector('[data-region]').value;
-        const category = document.querySelector('[data-category]').value;
-
-        PM.showStatus(status, 'saving', 'Saving…');
-        await PM.apiPost('/summary/save', {
-          row: item.row,
-          headline_line: headline,
-          bullets,
-          country, region, category
-        });
-        Object.assign(item, { headline_line: headline, bullets, country, region, category });
-        PM.showStatus(status, 'saved', 'Saved ✓');
-      }
-
-      document.querySelector('[data-action="add-bullet"]').addEventListener('click', () => {
-        const row = buildBulletRow('');
-        bulletsHost.appendChild(row);
-        row.querySelector('textarea').focus();
-      });
-
-      document.querySelector('[data-action="prev"]').addEventListener('click', async () => {
-        try {
-          await saveCurrent();
-          state.index = Math.max(0, state.index - 1);
-          renderItem();
-        } catch (err) {
-          PM.showStatus(status, 'error', err.message);
-          PM.toast(err.message, 'error');
-        }
-      });
-
-      document.querySelector('[data-action="save-next"]').addEventListener('click', async () => {
-        try {
-          await saveCurrent();
-          if (state.index === state.items.length - 1) {
-            PM.toast('All items saved', 'success');
-            window.location.href = './report.html';
-            return;
-          }
-          state.index++;
-          renderItem();
-        } catch (err) {
-          PM.showStatus(status, 'error', err.message);
-          PM.toast(err.message, 'error');
-        }
-      });
-
-      document.querySelector('[data-action="refresh"]').addEventListener('click', () => load(true));
-
+      document.querySelector('[data-action="refresh"]').addEventListener('click', load);
       load();
     })();
   </script>

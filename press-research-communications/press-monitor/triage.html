@@ -12,31 +12,19 @@
   <link rel="stylesheet" href="./assets/css/main.css">
 </head>
 <body class="page--press-research-communications">
-  <nav class="t-nav pm-nav" aria-label="Press Monitor sections">
-    <a class="t-nav__brand" href="../">
-      <span>Tipolis · Press Monitor</span>
-    </a>
-    <div class="t-nav__items">
-      <a class="t-pill" href="./">Hub</a>
-      <a class="t-pill" href="./terms.html">Terms</a>
-      <a class="t-pill is-active" href="./triage.html" aria-current="page">Triage</a>
-      <a class="t-pill" href="./summary.html">Summary</a>
-      <a class="t-pill" href="./report.html">Report</a>
-      <a class="t-pill" href="./history.html">History</a>
-    </div>
-  </nav>
+  <nav class="t-nav pm-nav" data-nav aria-label="Press Monitor sections"></nav>
 
   <main class="t-main">
     <header class="t-hero">
       <span class="t-hero__overline">Step 1 · Triage</span>
-      <h1 class="t-hero__title">Approve <span>or reject</span> the week.</h1>
-      <p class="t-hero__lead">Each card is one classified, in-window article. Approve to send it to the summary editor; reject to drop it. The report window is the previous Monday 00:00 through last Sunday 23:59.</p>
+      <h1 class="t-hero__title">Approve <span>or reject</span> the queue.</h1>
+      <p class="t-hero__lead">Each card is one classified article. Approve to send it to the summary editor (the backend builds the AI bullets, a few seconds); reject to drop it. By default the queue is limited to the current report window (previous Monday 00:00 → last Sunday 23:59).</p>
     </header>
 
     <section>
       <span class="t-eyebrow">Filter</span>
       <h2 class="t-h2 t-h2--sm">Pending</h2>
-      <p class="t-lead">Use the filters to focus on one category at a time. Rejected items are hidden by default.</p>
+      <p class="t-lead">Focus on one category at a time. Rejected items and out-of-window items are hidden unless you toggle them on.</p>
 
       <div class="pm-filter-row">
         <span class="pm-filter-row__label">Category</span>
@@ -45,6 +33,10 @@
         <button class="t-pill" data-filter="industry">Industry</button>
         <span class="pm-filter-row__label" style="margin-left:24px">View</span>
         <button class="t-pill" data-toggle-rejected aria-pressed="false">Show rejected</button>
+        <button class="t-pill" data-toggle-alldates aria-pressed="false"
+          title="By default the queue is limited to the current report window. Toggle on to see every classified row regardless of publish date.">
+          All dates
+        </button>
         <span class="pm-toolbar__spacer"></span>
         <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh</button>
       </div>
@@ -59,15 +51,17 @@
 
       <div data-error class="pm-error" hidden></div>
       <div data-state="loading" class="pm-loading">Loading triage queue</div>
-      <div data-empty class="pm-empty" hidden>No items in the queue for the current filter.</div>
+      <div data-empty class="pm-empty" hidden>No items in this window. Try "All dates" or run a search from Config.</div>
       <div data-list class="pm-triage-list"></div>
     </section>
   </main>
 
-  <script src="./assets/js/config.js"></script>
-  <script src="./assets/js/api.js"></script>
+  <script src="./js/api.js"></script>
   <script>
     (function () {
+      if (!PM.requireToken()) return;
+      PM.mountNav('triage');
+
       const errorBox = document.querySelector('[data-error]');
       const loading = document.querySelector('[data-state="loading"]');
       const emptyEl = document.querySelector('[data-empty]');
@@ -82,14 +76,12 @@
         items: [],
         filter: 'both',
         showRejected: false,
+        allDates: false,
         sessionApproved: 0,
         sessionRejected: 0
       };
 
-      function showError(msg) {
-        errorBox.textContent = msg;
-        errorBox.hidden = false;
-      }
+      function showError(msg) { errorBox.textContent = msg; errorBox.hidden = false; }
 
       function render() {
         listEl.innerHTML = '';
@@ -98,17 +90,11 @@
           if (state.filter === 'industry' && item.category !== 'industry') return false;
           return true;
         });
-        if (!filtered.length) {
-          emptyEl.hidden = false;
-          counts.pending.textContent = '0';
-          counts.approved.textContent = state.sessionApproved;
-          counts.rejected.textContent = state.sessionRejected;
-          return;
-        }
-        emptyEl.hidden = true;
-        counts.pending.textContent = filtered.length;
         counts.approved.textContent = state.sessionApproved;
         counts.rejected.textContent = state.sessionRejected;
+        counts.pending.textContent = filtered.length;
+        if (!filtered.length) { emptyEl.hidden = false; return; }
+        emptyEl.hidden = true;
 
         filtered.forEach(item => {
           const cardClass = 'pm-triage-card ' +
@@ -128,7 +114,6 @@
           ]);
 
           const desc = PM.el('p', { class: 'pm-triage-card__description' }, [item.description || '']);
-
           const reason = item.reason
             ? PM.el('div', { class: 'pm-triage-card__reason' }, ['AI: ' + item.reason])
             : null;
@@ -152,28 +137,35 @@
       }
 
       async function doApprove(item, ...btns) {
-        btns.forEach(b => b.disabled = true);
+        btns.forEach(b => { b.disabled = true; });
+        const approveBtn = btns[0];
+        approveBtn.textContent = 'Approving…';
         try {
           await PM.apiPost('/triage/approve', { row: item.row });
           state.sessionApproved++;
-          PM.toast('Approved · summary queued', 'success');
+          PM.toast('Approved — summary building.', 'success');
           removeItemByRow(item.row);
         } catch (err) {
-          PM.toast(err.message, 'error');
-          btns.forEach(b => b.disabled = false);
+          if (err.name !== 'Unauthorized') {
+            PM.toast(err.message, 'error');
+            approveBtn.textContent = 'Approve';
+            btns.forEach(b => { b.disabled = false; });
+          }
         }
       }
 
       async function doReject(item, ...btns) {
-        btns.forEach(b => b.disabled = true);
+        btns.forEach(b => { b.disabled = true; });
         try {
           await PM.apiPost('/triage/reject', { row: item.row });
           state.sessionRejected++;
           PM.toast('Rejected', 'success');
           removeItemByRow(item.row);
         } catch (err) {
-          PM.toast(err.message, 'error');
-          btns.forEach(b => b.disabled = false);
+          if (err.name !== 'Unauthorized') {
+            PM.toast(err.message, 'error');
+            btns.forEach(b => { b.disabled = false; });
+          }
         }
       }
 
@@ -182,14 +174,16 @@
         emptyEl.hidden = true;
         errorBox.hidden = true;
         try {
-          const params = state.showRejected ? { showRejected: 'true' } : null;
-          const data = await PM.apiGet('/triage', params);
+          const params = {};
+          if (state.showRejected) params.showRejected = 'true';
+          if (state.allDates) params.allDates = 'true';
+          const data = await PM.apiGet('/triage', Object.keys(params).length ? params : null);
           state.items = data || [];
           loading.hidden = true;
           render();
         } catch (err) {
           loading.hidden = true;
-          showError(err.message);
+          if (err.name !== 'Unauthorized') showError(err.message);
         }
       }
 
@@ -206,6 +200,14 @@
         state.showRejected = !state.showRejected;
         rejBtn.setAttribute('aria-pressed', String(state.showRejected));
         rejBtn.classList.toggle('is-active', state.showRejected);
+        load();
+      });
+
+      const allDatesBtn = document.querySelector('[data-toggle-alldates]');
+      allDatesBtn.addEventListener('click', () => {
+        state.allDates = !state.allDates;
+        allDatesBtn.setAttribute('aria-pressed', String(state.allDates));
+        allDatesBtn.classList.toggle('is-active', state.allDates);
         load();
       });
 

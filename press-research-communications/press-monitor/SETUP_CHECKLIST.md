@@ -19,28 +19,31 @@ The PR to `main` opens only when every box is checked.
 - [x] **Consolidated single-file build** at
       `press-research-communications/Tipolis_Press_Monitor.consolidated.gs`
       (1667 lines, all 11 files concatenated in order)
-- [x] Frontend (`press-monitor/`): 5 screens + hub + shared CSS/JS
-- [x] `config.js` wired with `WEB_APP_URL` + `BEARER_TOKEN`
+- [x] Frontend (`press-monitor/`): index (sign-in gate + hub) + 5 screens
+      (triage, summary, report, config, history) + shared CSS/JS
+- [x] `js/api.js` ships with the deployed `WEB_APP_URL` hard-coded; the
+      bearer token is entered on the `index.html` sign-in gate and lives only in
+      `sessionStorage` for the session
 - [x] Bug fix: GNews key removed from `SETTINGS_SEED`
 - [x] Docs: root `README.md`, `press-research-communications/README.md`,
       `apps-script/README.md`, `press-monitor/README.md`
 
-## Phase 1 — Paste the consolidated build into Apps Script  ⏳ next
+## Phase 1 — Paste the consolidated build into Apps Script  ✅ done
 
 Replaces the legacy `search news.gs` (OpenAI-based, single file) with the
 11-file Gemini architecture, delivered as one giant `.gs` you paste in
 the editor.
 
-- [ ] Backup the current `search news.gs` content (copy the text into a
+- [x] Backup the current `search news.gs` content (copy the text into a
       local file or a Drive doc — the paste will overwrite it)
-- [ ] Open the consolidated file on GitHub:
+- [x] Open the consolidated file on GitHub:
       `press-research-communications/Tipolis_Press_Monitor.consolidated.gs`
       → click **Raw** → Ctrl/Cmd+A to select all → Ctrl/Cmd+C to copy
-- [ ] In the Apps Script editor:
-  - [ ] Delete the existing `search news.gs` (or rename it to `Code` and
+- [x] In the Apps Script editor:
+  - [x] Delete the existing `search news.gs` (or rename it to `Code` and
         clear its contents)
-  - [ ] Paste the consolidated content into one `.gs` file (Ctrl/Cmd+V)
-  - [ ] Save (Ctrl/Cmd+S)
+  - [x] Paste the consolidated content into one `.gs` file (Ctrl/Cmd+V)
+  - [x] Save (Ctrl/Cmd+S)
 - [ ] (Optional but recommended) Update the manifest so the Web App
       deployment settings match the spec:
   - [ ] Project Settings (gear icon) → enable
@@ -49,7 +52,7 @@ the editor.
         `press-research-communications/apps-script/appsscript.json`
         in this repo. Save.
 
-## Phase 2 — Sheet bootstrap
+## Phase 2 — Sheet bootstrap  ⏳ next
 
 The 11 `.gs` files include a setup routine that creates every sheet, every
 header, and seeds the priority-country list.
@@ -84,7 +87,7 @@ others depend on Drive/AI Studio steps.
 ## Phase 4 — Activate the pipeline
 
 - [ ] In the Sheet menu: **Tipolis → Install all triggers** (daily 06:00
-      search; Monday 07:00 AI filter)
+      search; daily 07:00 AI filter)
 - [ ] In the Apps Script editor: **Deploy → Manage deployments → pencil →
       Version: New version → Deploy**. The Web App URL stays the same;
       this just makes the new code live.

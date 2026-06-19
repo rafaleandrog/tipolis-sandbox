@@ -9,7 +9,7 @@ function onOpen() {
     .addItem('Create / repair project sheets', 'createProjectSheets')
     .addSeparator()
     .addItem('Run daily search now', 'runSearchNow')
-    .addItem('Run weekly AI filter now', 'runAIFilterNow')
+    .addItem('Run AI filter now', 'runAIFilterNow')
     .addSeparator()
     .addItem('Generate weekly report now', 'generateReportNow')
     .addItem('Archive & reset week', 'archiveWeekNow')

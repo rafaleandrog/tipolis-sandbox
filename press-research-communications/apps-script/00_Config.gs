@@ -70,7 +70,7 @@ const APP = {
     max_results: 20,
     gemini_model: 'gemini-2.5-flash',
     daily_search_hour: 6,    // daily search runs ~06:00
-    weekly_filter_hour: 7    // weekly AI filter runs ~07:00 (margin after search)
+    weekly_filter_hour: 7    // daily AI filter hour (~07:00, margin after the 06:00 search)
   },
 
   PROPERTIES: {
@@ -130,6 +130,6 @@ const SETTINGS_SEED = [
   ['report_drive_folder_id', '', 'Drive folder ID where generated reports are saved — PASTE HERE'],
   ['report_template_doc_id', '', 'Google Doc ID of the report template — PASTE HERE'],
   ['daily_search_auto_run', 'true', 'Toggle the daily search trigger'],
-  ['weekly_filter_auto_run', 'true', 'Toggle the weekly AI filter trigger'],
+  ['weekly_filter_auto_run', 'true', 'Toggle the daily AI filter trigger (key name kept for backward compatibility)'],
   ['frontend_bearer_token', '', 'Random 32+ char token the frontend must send — PASTE HERE']
 ];
