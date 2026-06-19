@@ -12,101 +12,124 @@
   <link rel="stylesheet" href="./assets/css/main.css">
 </head>
 <body class="page--press-research-communications">
-  <nav class="t-nav pm-nav" aria-label="Press Monitor sections">
-    <a class="t-nav__brand" href="../">
-      <span>Tipolis · Press Monitor</span>
-    </a>
-    <div class="t-nav__items">
-      <a class="t-pill is-active" href="./" aria-current="page">Hub</a>
-      <a class="t-pill" href="./terms.html">Terms</a>
-      <a class="t-pill" href="./triage.html">Triage</a>
-      <a class="t-pill" href="./summary.html">Summary</a>
-      <a class="t-pill" href="./report.html">Report</a>
-      <a class="t-pill" href="./history.html">History</a>
+
+  <!-- LOGIN GATE -->
+  <main class="t-main" data-gate hidden>
+    <div class="pm-gate">
+      <div class="pm-gate__card">
+        <div class="pm-gate__eyebrow">Tipolis Press Monitor</div>
+        <h1 class="pm-gate__title">Sign in</h1>
+        <p class="pm-gate__hint">Enter the access token to drive the backend. It is held only for this browser session and never stored on the page.</p>
+        <form class="pm-gate__form" data-gate-form>
+          <input class="pm-gate__input" data-token-input type="password"
+            autocomplete="off" placeholder="Access token" aria-label="Access token">
+          <div class="pm-gate__error" data-gate-error></div>
+          <button class="pm-btn pm-btn--primary" type="submit" data-gate-submit>Enter</button>
+        </form>
+      </div>
     </div>
-  </nav>
-
-  <main class="t-main">
-    <header class="t-hero">
-      <span class="t-hero__overline">Tipolis Press Monitor</span>
-      <h1 class="t-hero__title">Weekly news pipeline. <span>From RSS to a branded report.</span></h1>
-      <p class="t-hero__lead">Five operational screens drive the Monday workflow: maintain the search terms, triage the AI-classified results, edit the bullet summary one item at a time, preview the report, generate the Doc, and browse the archived history grouped by country.</p>
-    </header>
-
-    <section>
-      <span class="t-eyebrow">Workflow</span>
-      <h2 class="t-h2 t-h2--sm">Pick a screen</h2>
-      <p class="t-lead">Each card opens the screen that handles that step. The Apps Script Web App is the only backend — the Google Sheet stores everything else.</p>
-
-      <div class="pm-hub-grid">
-        <a class="pm-hub-card" href="./terms.html">
-          <span class="pm-hub-card__eyebrow">Step 0 · Maintain</span>
-          <span class="pm-hub-card__title">Search terms</span>
-          <span class="pm-hub-card__body">Enable, disable, or fine-tune the keywords the daily search uses.</span>
-        </a>
-        <a class="pm-hub-card" href="./triage.html">
-          <span class="pm-hub-card__eyebrow">Step 1 · Triage</span>
-          <span class="pm-hub-card__title">Approve or reject</span>
-          <span class="pm-hub-card__body">Review the classified week and approve the items that go into this week's report.</span>
-        </a>
-        <a class="pm-hub-card" href="./summary.html">
-          <span class="pm-hub-card__eyebrow">Step 2 · Edit</span>
-          <span class="pm-hub-card__title">Summary wizard</span>
-          <span class="pm-hub-card__body">Trim the AI-generated bullets one article at a time. 6–10 → 3–5.</span>
-        </a>
-        <a class="pm-hub-card" href="./report.html">
-          <span class="pm-hub-card__eyebrow">Step 3 · Generate</span>
-          <span class="pm-hub-card__title">Preview &amp; report</span>
-          <span class="pm-hub-card__body">Reorder by section, generate the Word/Doc copy, then archive the week.</span>
-        </a>
-        <a class="pm-hub-card" href="./history.html">
-          <span class="pm-hub-card__eyebrow">Browse</span>
-          <span class="pm-hub-card__title">History</span>
-          <span class="pm-hub-card__body">Every archived article grouped by country. Click to drill in.</span>
-        </a>
-      </div>
-    </section>
-
-    <hr class="t-divider">
-
-    <section>
-      <span class="t-eyebrow">Manual triggers</span>
-      <h2 class="t-h2 t-h2--sm">Run now</h2>
-      <p class="t-lead">Bypass the scheduled triggers when you need a fresh batch on demand. Both calls return immediately; check the <em>logs</em> sheet for progress.</p>
-
-      <div class="pm-toolbar">
-        <button class="pm-btn pm-btn--ghost" data-action="search">Run daily search now</button>
-        <button class="pm-btn pm-btn--ghost" data-action="filter">Run AI filter now</button>
-        <span class="pm-toolbar__spacer"></span>
-        <span class="pm-toolbar__status" data-status></span>
-      </div>
-    </section>
   </main>
 
-  <script src="./assets/js/config.js"></script>
-  <script src="./assets/js/api.js"></script>
+  <!-- HUB (after auth) -->
+  <div data-hub hidden>
+    <nav class="t-nav pm-nav" data-nav aria-label="Press Monitor sections"></nav>
+
+    <main class="t-main">
+      <header class="t-hero">
+        <span class="t-hero__overline">Tipolis Press Monitor</span>
+        <h1 class="t-hero__title">Weekly news pipeline. <span>From RSS to a branded report.</span></h1>
+        <p class="t-hero__lead">Five screens drive the workflow: triage the AI-classified results, edit the bullet summaries, preview and generate the report, manage the search configuration, and browse the archived history.</p>
+      </header>
+
+      <section>
+        <span class="t-eyebrow">Workflow</span>
+        <h2 class="t-h2 t-h2--sm">Pick a screen</h2>
+        <p class="t-lead">The Apps Script Web App is the only backend — the Google Sheet stores everything else.</p>
+
+        <div class="pm-hub-grid">
+          <a class="pm-hub-card" href="./triage.html">
+            <span class="pm-hub-card__eyebrow">Step 1 · Triage</span>
+            <span class="pm-hub-card__title">Approve or reject</span>
+            <span class="pm-hub-card__body">Review the classified items and approve the ones that go into this report.</span>
+          </a>
+          <a class="pm-hub-card" href="./summary.html">
+            <span class="pm-hub-card__eyebrow">Step 2 · Edit</span>
+            <span class="pm-hub-card__title">Summaries</span>
+            <span class="pm-hub-card__body">Trim the AI-generated bullets. 6–10 → 3–5, and fix country/region/category.</span>
+          </a>
+          <a class="pm-hub-card" href="./report.html">
+            <span class="pm-hub-card__eyebrow">Step 3 · Generate</span>
+            <span class="pm-hub-card__title">Report</span>
+            <span class="pm-hub-card__body">Preview the two sections, generate the Doc, then archive the week.</span>
+          </a>
+          <a class="pm-hub-card" href="./config.html">
+            <span class="pm-hub-card__eyebrow">Setup</span>
+            <span class="pm-hub-card__title">Config</span>
+            <span class="pm-hub-card__body">Search terms, priority countries, and the manual "run now" actions.</span>
+          </a>
+          <a class="pm-hub-card" href="./history.html">
+            <span class="pm-hub-card__eyebrow">Browse</span>
+            <span class="pm-hub-card__title">History</span>
+            <span class="pm-hub-card__body">Every archived article grouped by country. Read-only.</span>
+          </a>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="./js/api.js"></script>
   <script>
     (function () {
-      const status = document.querySelector('[data-status]');
-      document.querySelectorAll('[data-action]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const action = btn.dataset.action;
-          const path = action === 'search' ? '/search/run' : '/filter/run';
-          const label = action === 'search' ? 'Daily search' : 'AI filter';
-          PM.showStatus(status, 'saving', label + '… running');
-          btn.disabled = true;
-          try {
-            await PM.apiPost(path);
-            PM.showStatus(status, 'saved', label + ' started');
-            PM.toast(label + ' started', 'success');
-          } catch (err) {
-            PM.showStatus(status, 'error', err.message);
-            PM.toast(err.message, 'error');
-          } finally {
-            btn.disabled = false;
-          }
-        });
+      const gate = document.querySelector('[data-gate]');
+      const hub = document.querySelector('[data-hub]');
+      const form = document.querySelector('[data-gate-form]');
+      const input = document.querySelector('[data-token-input]');
+      const errorEl = document.querySelector('[data-gate-error]');
+      const submit = document.querySelector('[data-gate-submit]');
+
+      function showGate() {
+        hub.hidden = true;
+        gate.hidden = false;
+        setTimeout(() => input.focus(), 0);
+      }
+
+      function showHub() {
+        gate.hidden = true;
+        hub.hidden = false;
+        PM.mountNav('hub');
+      }
+
+      async function tryToken(candidate) {
+        errorEl.textContent = '';
+        submit.disabled = true;
+        submit.textContent = 'Checking…';
+        try {
+          const ok = await PM.validateToken(candidate);
+          if (ok) { showHub(); }
+          else { PM.clearToken(); errorEl.textContent = 'Invalid token. Try again.'; showGate(); }
+        } catch (err) {
+          // Network / timeout — keep the token, let the user retry.
+          errorEl.textContent = err.message || 'Could not reach the backend.';
+          showGate();
+        } finally {
+          submit.disabled = false;
+          submit.textContent = 'Enter';
+        }
+      }
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const val = input.value.trim();
+        if (!val) { errorEl.textContent = 'Enter a token.'; return; }
+        tryToken(val);
       });
+
+      // On load: if a session token exists, validate silently; else show gate.
+      if (PM.hasToken()) {
+        tryToken(undefined);
+      } else {
+        showGate();
+      }
     })();
   </script>
 </body>
