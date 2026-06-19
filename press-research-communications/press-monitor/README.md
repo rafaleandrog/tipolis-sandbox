@@ -9,17 +9,18 @@ Script Web App is the API; this folder is the only interface the editor uses.
 ```
 press-research-communications/
 ├── press-monitor/          ← this folder (the frontend)
-│   ├── index.html          hub with cards for the 5 screens + manual triggers
-│   ├── terms.html          search_terms manager
+│   ├── login.html          one-field token gate (sessionStorage only)
+│   ├── index.html          hub with cards for the 5 screens
 │   ├── triage.html         per-card approve / reject queue
 │   ├── summary.html        one-article-at-a-time bullet editor (wizard)
 │   ├── report.html         drag-to-reorder preview, generate Doc, archive week
 │   ├── history.html        archived items grouped by country
+│   ├── config.html         search_terms manager + report settings
+│   ├── js/
+│   │   └── api.js          fetch wrapper, login gate, nav, markdown renderer
+│   │                       (Web App URL hard-coded — bearer comes from login)
 │   └── assets/
-│       ├── css/main.css
-│       └── js/
-│           ├── config.js   ← edit this after deploying the Web App
-│           └── api.js      fetch wrapper + inline markdown renderer
+│       └── css/main.css    page-specific overrides on top of the design system
 ├── apps-script/            backend — 11 .gs files + manifest + clasp template
 ├── docs/                   editorial spec + manual setup guide
 └── template/               branded .docx report template
@@ -48,7 +49,10 @@ the Google Sheet, the AI Studio key, and the Drive folder. The short version:
    daily AI filter).
 6. **Deploy → New deployment → Web app** (execute as you, anyone access).
    Copy the `/exec` URL.
-7. Open `assets/js/config.js` and paste both the URL and the bearer token.
+7. Open `js/api.js` and replace `PM_WEB_APP_URL` with the deployed `/exec` URL.
+   The bearer token is **not** stored in any file — the editor pastes it once
+   on `login.html`; it is held in `sessionStorage` for the duration of the
+   session and cleared on Logout.
 8. **GitHub Pages**: serve from the `main` branch root (the existing setting).
    The frontend lives at:
    `https://<user>.github.io/tipolis-sandbox/press-research-communications/press-monitor/`
@@ -77,7 +81,7 @@ commands.
 ## What is NOT in this version
 
 - No fully-manual article entry (deferred).
-- No localStorage / sessionStorage anywhere — secrets sit only in
-  `report_settings` (server-side) and `assets/js/config.js` (the bearer token
-  and the Web App URL).
+- No localStorage anywhere. The bearer token sits in `sessionStorage` only
+  for the session (cleared on Logout or tab close); every other secret stays
+  server-side in the `report_settings` sheet.
 - No historical migration of past reports — that is a separate later task.

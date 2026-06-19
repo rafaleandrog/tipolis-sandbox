@@ -127,27 +127,35 @@ If all five steps work, the backend is correct and the frontend is just a nicer 
 ### E2. Repo structure (frontend, built in the next step of the project)
 
 ```
-tipolis-press-monitor/
-├── index.html               navigation hub
-├── terms.html               Search Terms Manager
+press-monitor/
+├── login.html               One-field token gate
+├── index.html               Navigation hub
 ├── triage.html              Triage & Approve
 ├── summary.html             Summary Editor (wizard)
 ├── report.html              Report Preview & Generate
 ├── history.html             History Browser
-└── assets/
-    ├── css/main.css
-    └── js/
-        ├── config.js         holds WEB_APP_URL + bearer token
-        └── api.js            fetch wrapper around the Web App
+├── config.html              Search Terms + Report Settings
+├── js/
+│   └── api.js               WEB_APP_URL + fetch wrapper + login gate + nav
+└── assets/css/main.css      Page-specific overrides on top of the design system
 ```
 
 ### E3. How the connection works
 
-- `assets/js/config.js` stores two values: the Web App `/exec` URL and the `frontend_bearer_token`.
-- `assets/js/api.js` sends every request as `WEB_APP_URL?path=/triage&token=TOKEN`, POST bodies as `text/plain` JSON (this avoids the CORS preflight problem with Apps Script).
-- The Apps Script `doGet`/`doPost` validates the token, routes by `path`, reads/writes the Sheet, and returns JSON.
+- `js/api.js` holds the Web App `/exec` URL hard-coded. The bearer token is
+  entered once on `login.html` and stored in `sessionStorage` only — never on
+  disk, never committed.
+- Every request goes as `WEB_APP_URL?path=/triage&token=TOKEN` (POST bodies as
+  `text/plain` JSON to avoid the CORS preflight with Apps Script).
+- The Apps Script `doGet` / `doPost` validates the token, routes by `path`,
+  reads/writes the Sheet, and returns JSON.
+- A 401 from any call clears the session and bounces the editor back to
+  `login.html`.
 
-Because GitHub Pages is public, the token in `config.js` is visible to anyone who views source. That is acceptable for a personal tool; use a long random token and rotate it (change it in `report_settings` and in `config.js`) if it ever leaks.
+Because GitHub Pages is public, only the Web App URL is exposed in the
+sources — never the token. Rotate the token by changing
+`frontend_bearer_token` in the `report_settings` sheet; existing sessions
+become invalid on the next request and the editor logs in again.
 
 ### E4. Publishing
 
