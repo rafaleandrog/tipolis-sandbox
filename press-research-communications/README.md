@@ -15,5 +15,7 @@ Project workspace for press research communications.
 
 ## Deployment Notes
 Use relative links and keep static hosting compatibility. The Press Monitor
-expects `assets/js/config.js` to be filled with the deployed Web App URL and
-the bearer token before the screens will load data.
+frontend ships with the deployed Web App URL hard-coded in
+`press-monitor/js/api.js`; the bearer token is supplied at runtime via the
+login screen (`press-monitor/login.html`) and lives only in `sessionStorage`
+for the duration of the editor's session.
