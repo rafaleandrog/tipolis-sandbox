@@ -9,8 +9,8 @@ Script Web App is the API; this folder is the only interface the editor uses.
 ```
 press-research-communications/
 ├── press-monitor/          ← this folder (the frontend)
-│   ├── login.html          one-field token gate (sessionStorage only)
-│   ├── index.html          hub with cards for the 5 screens
+│   ├── index.html          sign-in gate + hub (gate when no session token,
+│   │                       cards for the 5 screens once authenticated)
 │   ├── triage.html         per-card approve / reject queue
 │   ├── summary.html        one-article-at-a-time bullet editor (wizard)
 │   ├── report.html         drag-to-reorder preview, generate Doc, archive week
@@ -49,10 +49,10 @@ the Google Sheet, the AI Studio key, and the Drive folder. The short version:
    daily AI filter).
 6. **Deploy → New deployment → Web app** (execute as you, anyone access).
    Copy the `/exec` URL.
-7. Open `js/api.js` and replace `PM_WEB_APP_URL` with the deployed `/exec` URL.
-   The bearer token is **not** stored in any file — the editor pastes it once
-   on `login.html`; it is held in `sessionStorage` for the duration of the
-   session and cleared on Logout.
+7. Open `js/api.js` and set the `WEB_APP_URL` constant to the deployed
+   `/exec` URL. The bearer token is **not** stored in any file — the editor
+   pastes it once into the sign-in gate on `index.html`; it is held in
+   `sessionStorage` for the duration of the session and cleared on Logout.
 8. **GitHub Pages**: serve from the `main` branch root (the existing setting).
    The frontend lives at:
    `https://<user>.github.io/tipolis-sandbox/press-research-communications/press-monitor/`

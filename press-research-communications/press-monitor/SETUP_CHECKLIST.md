@@ -19,10 +19,10 @@ The PR to `main` opens only when every box is checked.
 - [x] **Consolidated single-file build** at
       `press-research-communications/Tipolis_Press_Monitor.consolidated.gs`
       (1667 lines, all 11 files concatenated in order)
-- [x] Frontend (`press-monitor/`): 6 screens (login, hub, triage, summary,
-      report, history, config) + shared CSS/JS
+- [x] Frontend (`press-monitor/`): index (sign-in gate + hub) + 5 screens
+      (triage, summary, report, config, history) + shared CSS/JS
 - [x] `js/api.js` ships with the deployed `WEB_APP_URL` hard-coded; the
-      bearer token is entered on `login.html` and lives only in
+      bearer token is entered on the `index.html` sign-in gate and lives only in
       `sessionStorage` for the session
 - [x] Bug fix: GNews key removed from `SETTINGS_SEED`
 - [x] Docs: root `README.md`, `press-research-communications/README.md`,

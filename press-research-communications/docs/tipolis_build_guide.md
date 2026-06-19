@@ -128,8 +128,7 @@ If all five steps work, the backend is correct and the frontend is just a nicer 
 
 ```
 press-monitor/
-├── login.html               One-field token gate
-├── index.html               Navigation hub
+├── index.html               Sign-in gate + navigation hub
 ├── triage.html              Triage & Approve
 ├── summary.html             Summary Editor (wizard)
 ├── report.html              Report Preview & Generate
@@ -143,14 +142,15 @@ press-monitor/
 ### E3. How the connection works
 
 - `js/api.js` holds the Web App `/exec` URL hard-coded. The bearer token is
-  entered once on `login.html` and stored in `sessionStorage` only — never on
+  entered once into the sign-in gate on `index.html` (the same page becomes the
+  hub after a valid token) and stored in `sessionStorage` only — never on
   disk, never committed.
 - Every request goes as `WEB_APP_URL?path=/triage&token=TOKEN` (POST bodies as
   `text/plain` JSON to avoid the CORS preflight with Apps Script).
 - The Apps Script `doGet` / `doPost` validates the token, routes by `path`,
   reads/writes the Sheet, and returns JSON.
-- A 401 from any call clears the session and bounces the editor back to
-  `login.html`.
+- A 401 from any call clears the session and bounces the editor back to the
+  sign-in gate on `index.html`.
 
 Because GitHub Pages is public, only the Web App URL is exposed in the
 sources — never the token. Rotate the token by changing

@@ -17,5 +17,6 @@ Project workspace for press research communications.
 Use relative links and keep static hosting compatibility. The Press Monitor
 frontend ships with the deployed Web App URL hard-coded in
 `press-monitor/js/api.js`; the bearer token is supplied at runtime via the
-login screen (`press-monitor/login.html`) and lives only in `sessionStorage`
-for the duration of the editor's session.
+sign-in gate built into `press-monitor/index.html` (it shows the token form
+when no session token is present, and the hub once authenticated) and lives
+only in `sessionStorage` for the duration of the editor's session.
