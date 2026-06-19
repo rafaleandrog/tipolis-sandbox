@@ -12,48 +12,38 @@
   <link rel="stylesheet" href="./assets/css/main.css">
 </head>
 <body class="page--press-research-communications">
-  <nav class="t-nav pm-nav" aria-label="Press Monitor sections">
-    <a class="t-nav__brand" href="../">
-      <span>Tipolis · Press Monitor</span>
-    </a>
-    <div class="t-nav__items">
-      <a class="t-pill" href="./">Hub</a>
-      <a class="t-pill" href="./terms.html">Terms</a>
-      <a class="t-pill" href="./triage.html">Triage</a>
-      <a class="t-pill" href="./summary.html">Summary</a>
-      <a class="t-pill is-active" href="./report.html" aria-current="page">Report</a>
-      <a class="t-pill" href="./history.html">History</a>
-    </div>
-  </nav>
+  <nav class="t-nav pm-nav" data-nav aria-label="Press Monitor sections"></nav>
 
   <main class="t-main">
     <header class="t-hero">
       <span class="t-hero__overline">Step 3 · Generate</span>
       <h1 class="t-hero__title">Preview, <span>generate, archive.</span></h1>
-      <p class="t-hero__lead">Drag items inside a section to set their order. Generate the Doc, open it, then archive the week — that moves everything into history and clears the working sheets.</p>
+      <p class="t-hero__lead">The preview groups items into the two sections of the Doc in the same order you set on the Summaries screen. Generate produces a branded Google Doc; Archive moves the week into history and clears the working sheets.</p>
     </header>
 
     <section>
       <div data-error class="pm-error" hidden></div>
       <div data-state="loading" class="pm-loading">Loading preview</div>
-      <div data-empty class="pm-empty" hidden>No approved items. Approve and edit some on Triage and Summary first.</div>
+      <div data-empty class="pm-empty" hidden>No approved items. Approve some on Triage and edit them on Summaries first.</div>
 
       <div data-preview hidden>
         <div class="pm-toolbar">
-          <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh</button>
+          <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh preview</button>
           <span class="pm-toolbar__spacer"></span>
-          <span class="pm-toolbar__status" data-status></span>
+          <span class="pm-slow-note">Generate can take 1–3 minutes.</span>
           <button class="pm-btn pm-btn--primary" data-action="generate">Generate report</button>
         </div>
 
         <div class="pm-section-block">
           <h3>Tipolis-related news</h3>
           <div class="pm-report-list" data-list-tipolis></div>
+          <div class="pm-empty" data-empty-tipolis hidden>No Tipolis-related items this week.</div>
         </div>
 
         <div class="pm-section-block">
           <h3>Industry news</h3>
           <div class="pm-report-list" data-list-industry></div>
+          <div class="pm-empty" data-empty-industry hidden>No industry items this week.</div>
         </div>
 
         <div data-result class="pm-report-result" hidden></div>
@@ -61,28 +51,37 @@
         <hr class="t-divider">
 
         <div class="pm-toolbar">
-          <span class="pm-toolbar__status" data-archive-status></span>
+          <span class="pm-slow-note">Archive empties approved_news AND search_results. Generate the report first.</span>
           <span class="pm-toolbar__spacer"></span>
           <button class="pm-btn pm-btn--danger" data-action="archive" disabled>Archive &amp; reset week</button>
         </div>
+
+        <div data-archive-result class="pm-report-result" hidden></div>
       </div>
     </section>
   </main>
 
-  <script src="./assets/js/config.js"></script>
-  <script src="./assets/js/api.js"></script>
+  <script src="./js/api.js"></script>
   <script>
     (function () {
+      if (!PM.requireToken()) return;
+      PM.mountNav('report');
+
       const errorBox = document.querySelector('[data-error]');
       const loading = document.querySelector('[data-state="loading"]');
       const emptyEl = document.querySelector('[data-empty]');
       const preview = document.querySelector('[data-preview]');
-      const status = document.querySelector('[data-status]');
-      const archiveStatus = document.querySelector('[data-archive-status]');
       const resultEl = document.querySelector('[data-result]');
+      const archiveResultEl = document.querySelector('[data-archive-result]');
+      const generateBtn = document.querySelector('[data-action="generate"]');
+      const archiveBtn = document.querySelector('[data-action="archive"]');
       const lists = {
         tipolis: document.querySelector('[data-list-tipolis]'),
         industry: document.querySelector('[data-list-industry]')
+      };
+      const emptySection = {
+        tipolis: document.querySelector('[data-empty-tipolis]'),
+        industry: document.querySelector('[data-list-industry]') && document.querySelector('[data-empty-industry]')
       };
 
       const state = { items: [], lastDoc: null };
@@ -94,62 +93,19 @@
         const bullets = PM.el('ul', { class: 'pm-report-item__bullets' },
           (item.bullets || []).map(b => PM.el('li', { html: PM.renderMarkdown(b) }))
         );
-        const el = PM.el('article', { class: 'pm-report-item', draggable: 'true' }, [headline, bullets]);
-        el.dataset.row = String(item.sheetRow);
-        el.dataset.category = item.category;
-
-        el.addEventListener('dragstart', e => {
-          el.classList.add('is-dragging');
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', String(item.sheetRow));
-        });
-        el.addEventListener('dragend', () => {
-          el.classList.remove('is-dragging');
-          persistOrder();
-        });
-        el.addEventListener('dragover', e => {
-          e.preventDefault();
-          const dragging = document.querySelector('.pm-report-item.is-dragging');
-          if (!dragging || dragging === el) return;
-          if (dragging.dataset.category !== el.dataset.category) return;
-          el.classList.add('is-drop-target');
-        });
-        el.addEventListener('dragleave', () => el.classList.remove('is-drop-target'));
-        el.addEventListener('drop', e => {
-          e.preventDefault();
-          el.classList.remove('is-drop-target');
-          const dragging = document.querySelector('.pm-report-item.is-dragging');
-          if (!dragging || dragging === el) return;
-          if (dragging.dataset.category !== el.dataset.category) return;
-          const rect = el.getBoundingClientRect();
-          const before = (e.clientY - rect.top) < rect.height / 2;
-          el.parentNode.insertBefore(dragging, before ? el : el.nextSibling);
-        });
-
-        return el;
-      }
-
-      async function persistOrder() {
-        const tipolis = Array.from(lists.tipolis.children).map(n => Number(n.dataset.row));
-        const industry = Array.from(lists.industry.children).map(n => Number(n.dataset.row));
-        const order = tipolis.concat(industry);
-        if (!order.length) return;
-        PM.showStatus(status, 'saving', 'Saving order…');
-        try {
-          await PM.apiPost('/summary/reorder', { order });
-          PM.showStatus(status, 'saved', 'Order saved ✓');
-        } catch (err) {
-          PM.showStatus(status, 'error', err.message);
-        }
+        return PM.el('article', { class: 'pm-report-item', dataset: { row: String(item.sheetRow), category: item.category } },
+          [headline, bullets]);
       }
 
       function render() {
         lists.tipolis.innerHTML = '';
         lists.industry.innerHTML = '';
-        state.items.forEach(item => {
-          const bucket = item.category === 'tipolis' ? lists.tipolis : lists.industry;
-          bucket.appendChild(buildItem(item));
-        });
+        const tipolis = state.items.filter(i => i.category === 'tipolis');
+        const industry = state.items.filter(i => i.category !== 'tipolis');
+        tipolis.forEach(i => lists.tipolis.appendChild(buildItem(i)));
+        industry.forEach(i => lists.industry.appendChild(buildItem(i)));
+        emptySection.tipolis.hidden = tipolis.length > 0;
+        emptySection.industry.hidden = industry.length > 0;
       }
 
       async function load() {
@@ -161,72 +117,71 @@
           const data = await PM.apiGet('/report/preview');
           loading.hidden = true;
           state.items = (data || []).sort((a, b) => (a.order || 0) - (b.order || 0));
-          if (!state.items.length) {
-            emptyEl.hidden = false;
-            return;
-          }
+          if (!state.items.length) { emptyEl.hidden = false; return; }
           preview.hidden = false;
           render();
         } catch (err) {
           loading.hidden = true;
-          showError(err.message);
+          if (err.name !== 'Unauthorized') showError(err.message);
         }
       }
 
-      document.querySelector('[data-action="refresh"]').addEventListener('click', load);
-
-      document.querySelector('[data-action="generate"]').addEventListener('click', async (e) => {
-        const btn = e.currentTarget;
-        btn.disabled = true;
-        PM.showStatus(status, 'saving', 'Generating Doc…');
-        try {
-          const data = await PM.apiPost('/report/generate');
-          state.lastDoc = data;
-          resultEl.hidden = false;
-          resultEl.innerHTML = '';
-          resultEl.appendChild(PM.el('div', null, [
-            'Report generated · Week ' + data.weekNumber + '/' + data.year +
-            ' (' + (data.reportDateDisplay || '') + '). '
-          ]));
-          resultEl.appendChild(PM.el('a', { href: data.url, target: '_blank', rel: 'noopener' }, ['Open the Doc ↗']));
-          PM.showStatus(status, 'saved', 'Generated ✓');
-          PM.toast('Report generated', 'success');
-          document.querySelector('[data-action="archive"]').disabled = false;
-        } catch (err) {
-          PM.showStatus(status, 'error', err.message);
-          PM.toast(err.message, 'error');
-        } finally {
-          btn.disabled = false;
-        }
+      generateBtn.addEventListener('click', () => {
+        PM.runSlow(generateBtn, async () => {
+          return await PM.apiPost('/report/generate', null, { timeoutMs: PM.SLOW_TIMEOUT_MS });
+        }, {
+          runningLabel: 'Generating Doc… this can take a few minutes',
+          successMessage: 'Report generated',
+          onDone: (data) => {
+            if (!data) return;
+            state.lastDoc = data;
+            resultEl.hidden = false;
+            resultEl.innerHTML = '';
+            resultEl.appendChild(PM.el('div', null, [
+              'Report generated · Week ' + data.weekNumber + '/' + data.year +
+              ' (' + (data.reportDateDisplay || '') + '). '
+            ]));
+            resultEl.appendChild(PM.el('a', { href: data.url, target: '_blank', rel: 'noopener' }, ['Open the Doc ↗']));
+            archiveBtn.disabled = false;
+          }
+        });
       });
 
-      document.querySelector('[data-action="archive"]').addEventListener('click', async (e) => {
-        if (!state.lastDoc) return;
+      archiveBtn.addEventListener('click', async () => {
+        if (!state.lastDoc) {
+          PM.toast('Generate the report before archiving.', 'error');
+          return;
+        }
         const ok = await PM.confirmDialog(
-          'This archives ' + state.items.length + ' item(s) into approved_history and clears approved_news + search_results. Proceed?'
+          'This archives ' + state.items.length + ' item(s) into approved_history, ' +
+          'clears approved_news AND search_results, and bumps the week counter.\n\n' +
+          'You cannot undo it from the UI. Proceed?'
         );
         if (!ok) return;
-        const btn = e.currentTarget;
-        btn.disabled = true;
-        PM.showStatus(archiveStatus, 'saving', 'Archiving…');
-        try {
-          const res = await PM.apiPost('/report/archive', {
+        PM.runSlow(archiveBtn, async () => {
+          return await PM.apiPost('/report/archive', {
             docId: state.lastDoc.docId,
             docUrl: state.lastDoc.url
-          });
-          PM.showStatus(archiveStatus, 'saved', 'Archived ' + res.archived + ' item(s). Week reset.');
-          PM.toast('Week archived', 'success');
-          state.items = [];
-          render();
-          emptyEl.hidden = false;
-          preview.hidden = true;
-        } catch (err) {
-          PM.showStatus(archiveStatus, 'error', err.message);
-          PM.toast(err.message, 'error');
-          btn.disabled = false;
-        }
+          }, { timeoutMs: PM.SLOW_TIMEOUT_MS });
+        }, {
+          runningLabel: 'Archiving…',
+          successMessage: 'Week archived',
+          onDone: (res) => {
+            archiveResultEl.hidden = false;
+            archiveResultEl.textContent = 'Week archived. approved_news and search_results are now clear (' +
+              (res ? res.archived : '?') + ' item(s) moved to history).';
+            state.items = [];
+            state.lastDoc = null;
+            render();
+            preview.hidden = true;
+            emptyEl.hidden = false;
+            archiveBtn.disabled = true;
+            resultEl.hidden = true;
+          }
+        });
       });
 
+      document.querySelector('[data-action="refresh"]').addEventListener('click', load);
       load();
     })();
   </script>
