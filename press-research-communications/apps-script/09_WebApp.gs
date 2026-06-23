@@ -51,6 +51,8 @@ function handleRequest_(e, method) {
       case 'POST /search/run':      return jsonOut_({ ok: true, data: (runSearchNow(), { started: true }) });
       case 'POST /filter/run':      return jsonOut_({ ok: true, data: (runAIFilterNow(), { started: true }) });
 
+      case 'POST /feedback':        return jsonOut_({ ok: true, data: api_saveFeedback_(body) });
+
       default: return jsonOut_({ ok: false, error: 'Unknown route: ' + route });
     }
   } catch (err) {
@@ -252,6 +254,30 @@ function api_history_(params) {
       docUrl: r[H.ReportDocUrl]
     };
   });
+}
+
+/* ---------- Feedback ---------- */
+
+function api_saveFeedback_(body) {
+  const title = String((body && body.title) || '').trim();
+  if (!title) throw new Error('Title is required');
+  const type = String((body && body.type) || '').toLowerCase();
+  if (type !== 'bug' && type !== 'suggestion') throw new Error('Type must be "bug" or "suggestion"');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(APP.SHEETS.FEEDBACK);
+  if (!sheet) {
+    sheet = ensureSheet_(ss, APP.SHEETS.FEEDBACK, APP.HEADERS.FEEDBACK);
+  }
+  const row = [
+    formatDateTime_(new Date()),
+    String((body && body.page) || 'General'),
+    type,
+    title,
+    String((body && body.description) || '')
+  ];
+  sheet.appendRow(row);
+  return { saved: true, row: sheet.getLastRow() };
 }
 
 function api_historyCountries_() {
