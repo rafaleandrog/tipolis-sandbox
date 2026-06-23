@@ -34,6 +34,7 @@ function createProjectSheets() {
   ensureSheet_(ss, APP.SHEETS.HISTORY, APP.HEADERS.HISTORY);
   ensureSheet_(ss, APP.SHEETS.SETTINGS, APP.HEADERS.SETTINGS);
   ensureSheet_(ss, APP.SHEETS.LOGS, APP.HEADERS.LOGS);
+  ensureSheet_(ss, APP.SHEETS.FEEDBACK, APP.HEADERS.FEEDBACK);
 
   formatTermsSheet_(ss.getSheetByName(APP.SHEETS.TERMS));
   formatResultsSheet_(ss.getSheetByName(APP.SHEETS.RESULTS));
