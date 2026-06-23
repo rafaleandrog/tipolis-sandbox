@@ -14,7 +14,8 @@ const APP = {
     APPROVED: 'approved_news',
     HISTORY: 'approved_history',
     SETTINGS: 'report_settings',
-    LOGS: 'logs'
+    LOGS: 'logs',
+    FEEDBACK: 'feedback'
   },
 
   HEADERS: {
@@ -42,7 +43,8 @@ const APP = {
       'Final_Bullets', 'ReportDocId', 'ReportDocUrl'
     ],
     SETTINGS: ['key', 'value', 'description'],
-    LOGS: ['DateTime', 'Step', 'Message']
+    LOGS: ['DateTime', 'Step', 'Message'],
+    FEEDBACK: ['CreatedAt', 'Page', 'Type', 'Title', 'Description']
   },
 
   // Column indexes (1-based) for frequently used sheets

@@ -78,6 +78,7 @@
   </div>
 
   <script src="./js/api.js"></script>
+  <script src="./js/feedback.js"></script>
   <script>
     (function () {
       const gate = document.querySelector('[data-gate]');
@@ -97,6 +98,7 @@
         gate.hidden = true;
         hub.hidden = false;
         PM.mountNav('hub');
+        if (PM.mountFeedback) PM.mountFeedback();
       }
 
       async function tryToken(candidate) {
