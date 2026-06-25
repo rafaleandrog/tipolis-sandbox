@@ -18,7 +18,7 @@
     <header class="t-hero">
       <span class="t-hero__overline">Step 1 · Triage</span>
       <h1 class="t-hero__title">Approve <span>or reject</span> the queue.</h1>
-      <p class="t-hero__lead">Each card is one classified article. Approve to send it to the summary editor (the backend builds the AI bullets, a few seconds); reject to drop it. By default the queue is limited to the current report window (previous Monday 00:00 → last Sunday 23:59).</p>
+      <p class="t-hero__lead">Each card is one classified article. Approve to send it to the summary editor; reject to drop it. Approving is instant — the AI bullets are generated separately, in a batch, from the Summaries screen. By default the queue is limited to the current report window (previous Monday 00:00 → last Sunday 23:59).</p>
     </header>
 
     <section>
@@ -144,7 +144,7 @@
         try {
           await PM.apiPost('/triage/approve', { row: item.row });
           state.sessionApproved++;
-          PM.toast('Approved — summary building.', 'success');
+          PM.toast('Approved — summary pending', 'success');
           removeItemByRow(item.row);
         } catch (err) {
           if (err.name !== 'Unauthorized') {

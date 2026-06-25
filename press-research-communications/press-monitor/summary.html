@@ -18,7 +18,7 @@
     <header class="t-hero">
       <span class="t-hero__overline">Step 2 · Edit</span>
       <h1 class="t-hero__title">Summaries.</h1>
-      <p class="t-hero__lead">The AI drafts 6–10 bullets per article; trim each to a tight 3–5. Edit the headline and bullets, fix country/region/category, drag cards to set the order they appear in the report.</p>
+      <p class="t-hero__lead">Newly approved articles arrive here with their summary <em>pending</em>. Hit “Generate pending summaries” to have the AI draft 6–10 bullets each, in small batches; then trim each to a tight 3–5. Edit the headline and bullets, fix country/region/category, drag cards to set the order they appear in the report.</p>
     </header>
 
     <section>
@@ -27,6 +27,8 @@
           Markdown: <code>**bold**</code> <code>*italic*</code> <code>[text](url)</code>
         </span>
         <span class="pm-toolbar__spacer"></span>
+        <span class="pm-toolbar__status" data-build-status></span>
+        <button class="pm-btn pm-btn--primary" data-action="build" disabled>Generate pending summaries</button>
         <span class="pm-toolbar__status" data-order-status></span>
         <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh</button>
       </div>
@@ -50,6 +52,8 @@
       const emptyEl = document.querySelector('[data-empty]');
       const listEl = document.querySelector('[data-list]');
       const orderStatus = document.querySelector('[data-order-status]');
+      const buildBtn = document.querySelector('[data-action="build"]');
+      const buildStatus = document.querySelector('[data-build-status]');
 
       const REGIONS = ['Africa','Caribbean','Latin America','North America','Europe',
         'Middle East','South Asia','Southeast Asia','East Asia','Oceania','Global'];
@@ -231,9 +235,71 @@
         }
       }
 
+      function pendingCount() {
+        return state.items.filter(i => String(i.aiStatus || '') === 'Pending').length;
+      }
+
+      // Reflect how many summaries still need generating on the button.
+      function updateBuildUI() {
+        const n = pendingCount();
+        buildBtn.textContent = n
+          ? 'Generate pending summaries (' + n + ')'
+          : 'Generate pending summaries';
+        buildBtn.disabled = n === 0;
+      }
+
+      // Loop the backend's small-batch builder until nothing is pending.
+      // Each POST /summary/build {max} returns {built, remaining}. Already-built
+      // rows are persisted, so a mid-loop failure is safe to retry/resume.
+      async function buildPending() {
+        buildBtn.disabled = true;
+        let totalBuilt = 0;
+        PM.showStatus(buildStatus, 'saving', 'Generating…');
+        try {
+          while (true) {
+            const res = await PM.apiPost('/summary/build', { max: 2 },
+              { timeoutMs: PM.SLOW_TIMEOUT_MS }) || {};
+            const built = Number(res.built || 0);
+            const remaining = Number(res.remaining || 0);
+            totalBuilt += built;
+            if (remaining === 0) {
+              PM.showStatus(buildStatus, 'saved',
+                totalBuilt ? 'Generated ' + totalBuilt + ' ✓' : 'Nothing pending ✓');
+              break;
+            }
+            PM.showStatus(buildStatus, 'saving',
+              'Generated ' + totalBuilt + ' — ' + remaining + ' remaining…');
+            if (built === 0) {
+              // No progress but rows still pending — they likely errored. Stop
+              // rather than spin forever.
+              PM.showStatus(buildStatus, 'error',
+                remaining + ' could not be generated — check their status and retry.');
+              PM.toast('Some summaries could not be generated.', 'error');
+              break;
+            }
+          }
+          await load();                       // refresh cards + statuses + button
+        } catch (err) {
+          if (err.name === 'Unauthorized') return;   // api.js redirects to gate
+          if (err.name === 'TimeoutError') {
+            // The backend keeps generating even if this response is lost (§4).
+            // Built rows are persisted, so the user can resume by clicking again.
+            PM.showStatus(buildStatus, 'saving',
+              'Still generating in the background — refresh in a minute, then run again for any left.');
+            PM.toast('Still generating in the background.', 'info');
+          } else {
+            PM.showStatus(buildStatus, 'error', err.message);
+            PM.toast(err.message, 'error');
+          }
+          // already-built rows are saved; reload to show what landed
+          await load();
+        }
+      }
+
       function render() {
         listEl.innerHTML = '';
         state.items.forEach(item => listEl.appendChild(buildCard(item)));
+        updateBuildUI();
       }
 
       async function load() {
@@ -252,6 +318,7 @@
         }
       }
 
+      buildBtn.addEventListener('click', buildPending);
       document.querySelector('[data-action="refresh"]').addEventListener('click', load);
       load();
     })();
