@@ -79,8 +79,19 @@
 
       function showError(msg) { errorBox.textContent = msg; errorBox.hidden = false; }
 
+      function regionKey(region) {
+        return String(region || '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z]+/g, '-')
+          .replace(/^-|-$/g, '');
+      }
+
       function buildCountryCard(c) {
-        const card = PM.el('button', { class: 'pm-history-card' }, [
+        const card = PM.el('button', {
+          class: 'pm-history-card',
+          'data-region-key': regionKey(c.region)
+        }, [
           PM.el('div', { class: 'pm-history-card__country' }, [c.country || 'Unknown']),
           PM.el('div', { class: 'pm-history-card__region' }, [c.region || '—']),
           PM.el('div', { class: 'pm-history-card__stats' }, [
