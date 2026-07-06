@@ -20,6 +20,13 @@
   const DEFAULT_TIMEOUT_MS = 45000;   // light reads/writes
   const SLOW_TIMEOUT_MS = 180000;     // search / filter / report-generate
 
+  // Retry policy: every Web App fetch is attempted up to RETRY_ATTEMPTS times,
+  // waiting RETRY_DELAY_MS between tries, before the error is allowed to reach
+  // the user. Retries fire on a thrown fetch (network/timeout) or an HTTP
+  // 4xx/5xx response.
+  const RETRY_ATTEMPTS = 3;
+  const RETRY_DELAY_MS = 3000;
+
   let memToken = null;
 
   // --- Token management -------------------------------------------------
@@ -74,14 +81,19 @@
     return e;
   }
 
-  async function request(path, init, opts) {
-    opts = opts || {};
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // One fetch attempt with its own timeout. Resolves with the Response on a
+  // successful (res.ok) result; otherwise throws a classified, retryable error:
+  // TimeoutError on abort, NetworkError on a thrown fetch, HttpError on 4xx/5xx.
+  async function fetchOnce(url, fetchInit, path, ms) {
     const controller = new AbortController();
-    const ms = opts.timeoutMs || DEFAULT_TIMEOUT_MS;
     const timer = setTimeout(() => controller.abort(), ms);
     let res;
     try {
-      res = await fetch(init.url, Object.assign({ signal: controller.signal }, init.fetchInit));
+      res = await fetch(url, Object.assign({ signal: controller.signal }, fetchInit));
     } catch (err) {
       clearTimeout(timer);
       if (err && err.name === 'AbortError') throw timeoutError();
@@ -91,7 +103,37 @@
     }
     clearTimeout(timer);
 
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' calling ' + path);
+    if (!res.ok) {
+      const e = new Error('HTTP ' + res.status + ' calling ' + path);
+      e.name = 'HttpError';
+      e.status = res.status;
+      throw e;
+    }
+    return res;
+  }
+
+  // Retry wrapper — the single choke point every Web App fetch passes through.
+  // On a thrown fetch (network/timeout) or an HTTP 4xx/5xx response it retries
+  // up to RETRY_ATTEMPTS total attempts, RETRY_DELAY_MS apart. The error only
+  // propagates after the final attempt fails, so callers keep their spinner up
+  // and show no error message while retries are in flight.
+  async function fetchWithRetry(url, fetchInit, path, ms) {
+    let lastErr;
+    for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+      try {
+        return await fetchOnce(url, fetchInit, path, ms);
+      } catch (err) {
+        lastErr = err;
+        if (attempt < RETRY_ATTEMPTS) await sleep(RETRY_DELAY_MS);
+      }
+    }
+    throw lastErr;
+  }
+
+  async function request(path, init, opts) {
+    opts = opts || {};
+    const ms = opts.timeoutMs || DEFAULT_TIMEOUT_MS;
+    const res = await fetchWithRetry(init.url, init.fetchInit, path, ms);
 
     let json;
     try { json = await res.json(); }
