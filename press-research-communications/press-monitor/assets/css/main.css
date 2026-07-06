@@ -390,13 +390,19 @@
   gap: 12px;
 }
 .pm-history-card {
-  background: var(--color-bg-card-mid);
+  /* Per-region accent, set by [data-region-key] below; falls back to the
+     house orange for any region not in the palette. */
+  --region-accent: var(--accent);
+  background:
+    linear-gradient(color-mix(in srgb, var(--region-accent) 6%, transparent),
+                    color-mix(in srgb, var(--region-accent) 6%, transparent)),
+    var(--color-bg-card-mid);
   border: 1px solid var(--color-border-card);
-  border-top: 2px solid var(--accent);
+  border-top: 2px solid var(--region-accent);
   border-radius: var(--radius-1);
   padding: 14px 16px;
   cursor: pointer;
-  transition: border-color 200ms ease, transform 200ms ease;
+  transition: border-color 200ms ease, transform 200ms ease, box-shadow 200ms ease;
   text-align: left;
   font-family: inherit;
   color: inherit;
@@ -404,7 +410,8 @@
   width: 100%;
 }
 .pm-history-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  border-color: color-mix(in srgb, var(--region-accent) 60%, transparent);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--region-accent) 18%, transparent);
   transform: translateY(-1px);
 }
 .pm-history-card__country {
@@ -415,12 +422,24 @@
   margin-bottom: 4px;
 }
 .pm-history-card__region {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--region-accent);
   margin-bottom: 10px;
+}
+.pm-history-card__region::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--region-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--region-accent) 22%, transparent);
 }
 .pm-history-card__stats {
   display: flex;
@@ -435,9 +454,23 @@
 .pm-history-card__count {
   font-family: var(--font-display);
   font-size: 22px;
-  color: var(--accent);
+  color: var(--region-accent);
   letter-spacing: 0;
 }
+
+/* Region color palette — one distinct hue per canonical region
+   (see apps-script Config.REGIONS). Applied via data-region-key. */
+.pm-history-card[data-region-key="africa"]         { --region-accent: #FFD23F; }
+.pm-history-card[data-region-key="caribbean"]      { --region-accent: #06B6D4; }
+.pm-history-card[data-region-key="latin-america"]  { --region-accent: #FF6B35; }
+.pm-history-card[data-region-key="north-america"]  { --region-accent: #3B82F6; }
+.pm-history-card[data-region-key="europe"]         { --region-accent: #A78BFA; }
+.pm-history-card[data-region-key="middle-east"]    { --region-accent: #F5A623; }
+.pm-history-card[data-region-key="south-asia"]     { --region-accent: #A3E635; }
+.pm-history-card[data-region-key="southeast-asia"] { --region-accent: #2ECC71; }
+.pm-history-card[data-region-key="east-asia"]      { --region-accent: #F472B6; }
+.pm-history-card[data-region-key="oceania"]        { --region-accent: #0D9E8E; }
+.pm-history-card[data-region-key="global"]         { --region-accent: #94A3B8; }
 
 .pm-history-article {
   background: var(--color-bg-card);
