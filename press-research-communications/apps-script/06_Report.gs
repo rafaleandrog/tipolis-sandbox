@@ -102,7 +102,7 @@ function injectSection_(body, placeholder, items) {
 
     item.bullets.forEach(b => {
       const li = body.insertListItem(index++, '');
-      li.setGlyphType(DocumentApp.GlyphType.BULLET).setNestingLevel(1);
+      li.setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET).setNestingLevel(1);
       applyMarkdownToListItem_(li, b);
     });
   });
