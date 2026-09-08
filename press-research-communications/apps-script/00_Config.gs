@@ -8,15 +8,15 @@ const APP = {
   MENU: 'Tipolis',
 
   SHEETS: {
-    TERMS: 'search_terms',
-    COUNTRIES: 'tipolis_countries',
-    RESULTS: 'search_results',
-    APPROVED: 'approved_news',
-    HISTORY: 'approved_history',
-    SETTINGS: 'report_settings',
-    LOGS: 'logs',
-    FEEDBACK: 'feedback'
-  },
+  TERMS: 'search_terms',
+  COUNTRIES: 'tipolis_countries',
+  RESULTS: 'search_results',
+  APPROVED: 'approved_news',
+  HISTORY: 'approved_history',
+  SETTINGS: 'report_settings',
+  LOGS: 'logs',
+  FEEDBACK: 'feedback'
+},
 
   HEADERS: {
     TERMS: [
@@ -44,7 +44,7 @@ const APP = {
     ],
     SETTINGS: ['key', 'value', 'description'],
     LOGS: ['DateTime', 'Step', 'Message'],
-    FEEDBACK: ['CreatedAt', 'Page', 'Type', 'Title', 'Description']
+    FEEDBACK: ['Timestamp', 'Page', 'Type', 'Title', 'Description', 'Status']
   },
 
   // Column indexes (1-based) for frequently used sheets
@@ -72,7 +72,7 @@ const APP = {
     max_results: 20,
     gemini_model: 'gemini-2.5-flash',
     daily_search_hour: 6,    // daily search runs ~06:00
-    weekly_filter_hour: 7    // daily AI filter hour (~07:00, margin after the 06:00 search)
+    weekly_filter_hour: 7    // weekly AI filter runs ~07:00 (margin after search)
   },
 
   PROPERTIES: {
@@ -90,7 +90,7 @@ const APP = {
     MAX_CONTENT_CHARS: 12000,
     NEWS_REQUEST_SPACING_MS: 1200,   // 1.2s between news requests
     FILTER_BATCH_SIZE: 60,           // articles per AI Filter execution chunk
-    GEMINI_MAX_RETRIES: 1
+    GEMINI_MAX_RETRIES: 4
   },
 
   USER_AGENT:
@@ -132,6 +132,6 @@ const SETTINGS_SEED = [
   ['report_drive_folder_id', '', 'Drive folder ID where generated reports are saved — PASTE HERE'],
   ['report_template_doc_id', '', 'Google Doc ID of the report template — PASTE HERE'],
   ['daily_search_auto_run', 'true', 'Toggle the daily search trigger'],
-  ['weekly_filter_auto_run', 'true', 'Toggle the daily AI filter trigger (key name kept for backward compatibility)'],
+  ['weekly_filter_auto_run', 'true', 'Toggle the weekly AI filter trigger'],
   ['frontend_bearer_token', '', 'Random 32+ char token the frontend must send — PASTE HERE']
 ];

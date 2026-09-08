@@ -9,7 +9,7 @@
  * Copies to approved_news, then generates the AI summary.
  * Called by the frontend (/triage/approve) and by the manual menu.
  */
-function approveResultRow_(resultsRowNumber) {
+function approveResultRow_(resultsRowNumber, buildSummary) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const results = ss.getSheetByName(APP.SHEETS.RESULTS);
   const approved = ss.getSheetByName(APP.SHEETS.APPROVED);
@@ -43,11 +43,15 @@ function approveResultRow_(resultsRowNumber) {
     'Pending',                         // Edit_Status
     nextOrder                          // Display_Order
   ];
-  approved.appendRow(newRow);
-  const targetRow = approved.getLastRow();
+  const targetRow = getNextEmptyRowInCols_(approved, 1, APP.HEADERS.APPROVED.length);
+  approved.getRange(targetRow, 1, 1, APP.HEADERS.APPROVED.length).setValues([newRow]);
   results.getRange(resultsRowNumber, C.APPROVED).setValue(true);
 
-  generateSummaryForApprovedRow_(targetRow);
+  // Only build the summary inline when explicitly asked (menu batch).
+  // The web approve path skips this so the HTTP call returns fast (no timeout).
+  if (buildSummary) {
+    generateSummaryForApprovedRow_(targetRow);
+  }
   return targetRow;
 }
 
@@ -61,9 +65,10 @@ function generateSummaryForApprovedRow_(rowNumber) {
   const row = approved.getRange(rowNumber, 1, 1, APP.HEADERS.APPROVED.length).getValues()[0];
 
   try {
+    const pageText = fetchArticleText_(String(row[A.LINK - 1] || ''));   // read the real page
     const out = callGeminiJson_(
       getSummarySystemPrompt_(),
-      buildSummaryUserPrompt_(row),
+      buildSummaryUserPrompt_(row, pageText),
       SUMMARY_SCHEMA_
     );
     const payload = JSON.stringify({
@@ -71,10 +76,11 @@ function generateSummaryForApprovedRow_(rowNumber) {
       bullets: Array.isArray(out.bullets) ? out.bullets.map(String) : []
     });
     approved.getRange(rowNumber, A.AI_BULLETS_RAW).setValue(payload);
-    // Seed Edited_Bullets with the raw bullets so the editor starts populated.
     approved.getRange(rowNumber, A.EDITED_BULLETS).setValue(payload);
     approved.getRange(rowNumber, A.AI_STATUS).setValue('Done');
-    log_('generateSummary', `Summary generated for approved_news row ${rowNumber}.`);
+    log_('generateSummary',
+      `Summary generated for approved_news row ${rowNumber}` +
+      (pageText ? ' (full article text).' : ' (feed text only — page not fetchable).'));
   } catch (err) {
     approved.getRange(rowNumber, A.AI_STATUS).setValue('Error: ' + truncate_(getErrorMessage_(err), 150));
     log_('generateSummary', `Row ${rowNumber} error: ${getErrorMessage_(err)}`);
@@ -95,13 +101,20 @@ function getSummarySystemPrompt_() {
     'No opinions, no promotion, no filler, no "the article says". Never invent facts.',
     'Include controversy, opposition, regulatory risk, or pending approval when present.',
     'Allowed inline formatting: markdown links (max 1 per bullet, to authoritative sources for named programs, never the source publication); **bold** for headline money values or anchor place names; *italic* for project names on first mention; comparative bullets "**Actor:** ..." only when comparing 3+ peers.',
-    'headline_line format: "Source: [**Headline**](URL)".',
+    'headline_line format: "<PUBLICATION NAME>: [**<Headline>**](<URL>)". Replace <PUBLICATION NAME> with the actual source name provided; never write the literal word "Source".',
     'Return JSON only.'
   ].join(' ');
 }
 
-function buildSummaryUserPrompt_(row) {
+function buildSummaryUserPrompt_(row, fetchedText) {
   const A = APP.COL.APPROVED;
+  const feedDesc = String(row[A.DESCRIPTION - 1] || '');
+  const feedContent = String(row[A.CONTENT - 1] || '');
+  const articleText = String(fetchedText || '').trim();
+  // Use the fetched page when it's richer than the feed snippet; otherwise fall back.
+  const bodyText = (articleText && articleText.length > feedContent.length)
+    ? articleText
+    : (feedContent || feedDesc);
   return [
     `Source: ${row[A.SOURCE - 1]}`,
     `Title: ${row[A.TITLE - 1]}`,
@@ -110,11 +123,8 @@ function buildSummaryUserPrompt_(row) {
     `Country: ${row[A.COUNTRY - 1]}`,
     `Category: ${row[A.CATEGORY - 1]}`,
     '',
-    'Description:',
-    truncate_(String(row[A.DESCRIPTION - 1] || ''), 3000),
-    '',
-    'Content:',
-    truncate_(String(row[A.CONTENT - 1] || ''), APP.LIMITS.MAX_CONTENT_CHARS)
+    'Article text (use this as the primary source; do not invent beyond it):',
+    truncate_(bodyText, APP.LIMITS.MAX_CONTENT_CHARS)
   ].join('\n');
 }
 
@@ -137,7 +147,7 @@ function approveCheckedResultsNow() {
   let count = 0;
   for (let r = 2; r <= last; r++) {
     if (results.getRange(r, APP.COL.RESULTS.APPROVED).getValue() === true) {
-      if (approveResultRow_(r)) count++;
+      if (approveResultRow_(r, true)) count++;
     }
   }
   log_('approveCheckedResultsNow', `Approved ${count} row(s).`);

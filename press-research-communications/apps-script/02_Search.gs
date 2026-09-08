@@ -10,8 +10,8 @@ function runSearchNow() {
 }
 
 function runDailySearch() {
-  if (getSetting_('daily_search_auto_run') !== 'true') {
-    log_('runDailySearch', 'Skipped: daily_search_auto_run is not true.');
+  if (!isAutoRunOn_('daily_search_auto_run')) {
+    log_('runDailySearch', 'Skipped: daily search automation is paused.');
     return;
   }
   runSearchCore_('daily');
@@ -72,6 +72,89 @@ function runSearchCore_(mode) {
   }
 }
 
+// Manual backfill: search the last N days (1..30), bypass AI filter and triage.
+function runBackfillSearchNow() {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.prompt(
+    'Backfill search',
+    'How many days back to search? (1 to 30)\n\n' +
+    'Results land in search_results with FilterStatus="Skipped". ' +
+    'They are excluded from the AI filter (no Gemini cost) and from triage. ' +
+    'Browse them directly in the search_results sheet.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const days = parseInt(String(resp.getResponseText()).trim(), 10);
+  if (!days || days < 1 || days > 30) {
+    ui.alert('Please enter a whole number between 1 and 30.');
+    return;
+  }
+  runBackfillSearchCore_(days);
+}
+
+function runBackfillSearchCore_(daysOverride) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    log_('runBackfillSearch', 'Skipped: another execution is running.');
+    return;
+  }
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const termsSheet = ss.getSheetByName(APP.SHEETS.TERMS);
+    const resultsSheet = ss.getSheetByName(APP.SHEETS.RESULTS);
+
+    // Reuse the same active terms, but override every term's window with daysOverride.
+    const baseRules = getActiveTermRules_(termsSheet);
+    if (!baseRules.length) { log_('runBackfillSearch', 'No active terms.'); return; }
+    const rules = baseRules.map(r => Object.assign({}, r, { days: daysOverride }));
+
+    const knownUrls = getKnownUrls_(resultsSheet);  // dedup against results + history
+    const rowsToAppend = [];
+    const fetchedAt = formatDateTime_(new Date());
+
+    log_('runBackfillSearch', `Started (backfill ${daysOverride}d). Active terms: ${rules.length}.`);
+
+    for (const rule of rules) {
+      try {
+        const items = fetchNewsForRule_(rule);
+        let added = 0, dup = 0, invalid = 0;
+        for (const item of items) {
+          const link = normalizeUrl_(item.link);
+          if (!link) { invalid++; continue; }
+          if (knownUrls.has(link)) { dup++; continue; }
+          if (!passesLocalMatchRule_(rule, item)) { invalid++; continue; }
+          const row = buildResultRow_(rule.term, item, fetchedAt);
+          // Mark Skipped so the AI filter and triage ignore these rows.
+          row[APP.COL.RESULTS.FILTER_STATUS - 1] = 'Skipped';
+          rowsToAppend.push(row);
+          knownUrls.add(link);
+          added++;
+        }
+        log_('runBackfillSearch',
+          `Term "${rule.term}": ${items.length} fetched, ${added} new, ${dup} dup, ${invalid} filtered.`);
+      } catch (err) {
+        log_('runBackfillSearch', `Error for "${rule.term}": ${getErrorMessage_(err)}`);
+      }
+    }
+
+    const ui = SpreadsheetApp.getUi();
+    if (rowsToAppend.length) {
+      const startRow = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
+      resultsSheet.getRange(startRow, 1, rowsToAppend.length, APP.HEADERS.RESULTS.length)
+        .setValues(rowsToAppend);
+      resultsSheet.getRange(startRow, 1, rowsToAppend.length, 1).insertCheckboxes();
+      SpreadsheetApp.flush();
+      log_('runBackfillSearch', `${rowsToAppend.length} backfill row(s) written from row ${startRow}.`);
+      ui.alert(`Backfill complete.\n\n${rowsToAppend.length} new row(s) added to search_results (FilterStatus="Skipped").`);
+    } else {
+      log_('runBackfillSearch', 'No new rows (all duplicates).');
+      ui.alert('Backfill done.\n\nNo new rows — all results were already in the sheet (URL deduplication).');
+    }
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function getActiveTermRules_(sheet) {
   const lastRow = getLastDataRowInCols_(sheet, 1, APP.HEADERS.TERMS.length);
   if (lastRow < 2) return [];
@@ -99,10 +182,11 @@ function getActiveTermRules_(sheet) {
 /* ---------- Fetching ---------- */
 
 function fetchNewsForRule_(rule) {
-  const rss = fetchFromGoogleNewsRss_(rule);
-  if (rss.length) return rss.slice(0, rule.maxResults);
-  log_('fetchNewsForRule', `RSS empty for "${rule.term}". Trying GNews fallback.`);
-  return fetchFromGNewsApi_(rule).slice(0, rule.maxResults);
+  // GNews first: it returns the real publisher URL (readable). RSS only as fallback.
+  const gnews = fetchFromGNewsApi_(rule);
+  if (gnews.length) return gnews.slice(0, rule.maxResults);
+  log_('fetchNewsForRule', `GNews empty for "${rule.term}". Trying Google News RSS fallback.`);
+  return fetchFromGoogleNewsRss_(rule).slice(0, rule.maxResults);
 }
 
 function fetchFromGoogleNewsRss_(rule) {
@@ -158,7 +242,12 @@ function fetchFromGNewsApi_(rule) {
   if (!apiKey) { log_('fetchFromGNewsApi', 'No GNews key; skipping.'); return []; }
 
   const now = new Date();
-  const fromDate = new Date(now.getTime() - rule.days * 24 * 60 * 60 * 1000);
+  // GNews free tier delays data ~12h, so a 24h window only yields ~12h of usable data.
+  // Use a wider hours-based window so delayed articles (incl. niche terms) appear.
+  // Daily run + URL dedup makes the overlap harmless. 48h ≈ 36h of usable coverage.
+  const GNEWS_LOOKBACK_HOURS = 48;
+  const lookbackMs = Math.max(GNEWS_LOOKBACK_HOURS, (rule.days || 1) * 24) * 60 * 60 * 1000;
+  const fromDate = new Date(now.getTime() - lookbackMs);
   const term = rule.matchType === 'exact' ? `"${escapeQuotes_(rule.term)}"` : rule.term;
   const params = {
     q: term, max: String(Math.min(rule.maxResults, 100)),

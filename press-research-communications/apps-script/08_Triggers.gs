@@ -1,28 +1,26 @@
 /**************************************************************
  * TIPOLIS PRESS MONITOR — 08_Triggers.gs
- * Installs the daily search and daily AI filter triggers.
+ * Installs the daily search and weekly AI filter triggers.
  **************************************************************/
 
 function installAllTriggers() {
   removeTriggersByHandler_('runDailySearch');
-  removeTriggersByHandler_('runWeeklyAIFilter');
-  removeTriggersByHandler_('runWeeklyAIFilter_continuation');
+  removeTriggersByHandler_('runWeeklyAIFilter');              // legacy cleanup
+  removeTriggersByHandler_('runWeeklyAIFilter_continuation'); // legacy cleanup
+  removeTriggersByHandler_('runDailyAIFilter');
+  removeTriggersByHandler_('runDailyAIFilter_continuation');
 
-  // Daily search ~06:00 every day.
   ScriptApp.newTrigger('runDailySearch')
     .timeBased().everyDays(1).atHour(APP.DEFAULTS.daily_search_hour).create();
 
-  // Daily AI filter ~07:00 every day (margin after the 06:00 search).
-  // Handler name kept as runWeeklyAIFilter to avoid drift with the live
-  // deployment; the cadence change is in the trigger, not in the code.
-  ScriptApp.newTrigger('runWeeklyAIFilter')
+  ScriptApp.newTrigger('runDailyAIFilter')
     .timeBased().everyDays(1).atHour(APP.DEFAULTS.weekly_filter_hour).create();
 
-  log_('installAllTriggers', 'Daily search + daily AI filter triggers installed.');
+  log_('installAllTriggers', 'Daily search + daily AI classification triggers installed.');
   SpreadsheetApp.getUi().alert(
     'Triggers installed:\n' +
     `- Daily search ~${APP.DEFAULTS.daily_search_hour}:00\n` +
-    `- Daily AI filter ~${APP.DEFAULTS.weekly_filter_hour}:00`
+    `- Daily AI classification ~${APP.DEFAULTS.weekly_filter_hour}:00`
   );
 }
 

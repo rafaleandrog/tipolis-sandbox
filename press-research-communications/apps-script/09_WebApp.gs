@@ -50,8 +50,9 @@ function handleRequest_(e, method) {
 
       case 'POST /search/run':      return jsonOut_({ ok: true, data: (runSearchNow(), { started: true }) });
       case 'POST /filter/run':      return jsonOut_({ ok: true, data: (runAIFilterNow(), { started: true }) });
+      case 'POST /feedback':        return jsonOut_({ ok: true, data: api_submitFeedback_(body) });
 
-      case 'POST /feedback':        return jsonOut_({ ok: true, data: api_saveFeedback_(body) });
+      case 'POST /summary/build':   return jsonOut_({ ok: true, data: api_buildPendingSummaries_(body) });
 
       default: return jsonOut_({ ok: false, error: 'Unknown route: ' + route });
     }
@@ -64,6 +65,58 @@ function handleRequest_(e, method) {
 function jsonOut_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function api_submitFeedback_(body) {
+const ss = SpreadsheetApp.getActiveSpreadsheet();
+let sheet = ss.getSheetByName(APP.SHEETS.FEEDBACK);
+// Auto-create the sheet if it doesn't exist yet.
+if (!sheet) {
+  sheet = ss.insertSheet(APP.SHEETS.FEEDBACK);
+  sheet.getRange(1, 1, 1, APP.HEADERS.FEEDBACK.length).setValues([APP.HEADERS.FEEDBACK]);
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, APP.HEADERS.FEEDBACK.length).setFontWeight('bold').setBackground('#f1f3f4');
+}
+const page = String(body.page || '').trim();
+const type = String(body.type || '').trim().toLowerCase();
+const title = String(body.title || '').trim();
+const description = String(body.description || '').trim();
+// Light validation: title is required; type must be bug or suggestion.
+if (!title) throw new Error('Title is required.');
+if (type !== 'bug' && type !== 'suggestion') throw new Error('Type must be bug or suggestion.');
+const row = getNextEmptyRowInCols_(sheet, 1, APP.HEADERS.FEEDBACK.length);
+sheet.getRange(row, 1, 1, APP.HEADERS.FEEDBACK.length).setValues([[
+  formatDateTime_(new Date()), page, type, title, description, 'New'
+]]);
+log_('feedback', `New ${type} on "${page}": ${truncate_(title, 80)}`);
+return { saved: true, row: row };
+}
+
+function api_buildPendingSummaries_(body) {
+const ss = SpreadsheetApp.getActiveSpreadsheet();
+const approved = ss.getSheetByName(APP.SHEETS.APPROVED);
+const A = APP.COL.APPROVED;
+const last = getLastDataRowInCols_(approved, 1, APP.HEADERS.APPROVED.length);
+if (last < 2) return { built: 0, remaining: 0 };
+
+// How many to build in this call (keep small so the request returns before timeout).
+const MAX_PER_CALL = (body && Number(body.max)) ? Number(body.max) : 2;
+
+const statuses = approved.getRange(2, A.AI_STATUS, last - 1, 1).getValues();
+let built = 0, remaining = 0;
+for (let i = 0; i < statuses.length; i++) {
+  const status = String(statuses[i][0] || '');
+  const needs = (status === '' || status === 'Pending' || status.indexOf('Error') === 0);
+  if (!needs) continue;
+  if (built < MAX_PER_CALL) {
+    generateSummaryForApprovedRow_(i + 2);   // row number
+    built++;
+  } else {
+    remaining++;
+  }
+}
+log_('buildPendingSummaries', `Built ${built}, ${remaining} still pending.`);
+return { built: built, remaining: remaining };
 }
 
 /* ---------- Terms ---------- */
@@ -125,24 +178,29 @@ function api_listTriage_(params) {
   if (last < 2) return [];
   const showRejected = params && params.showRejected === 'true';
   const allDates = params && params.allDates === 'true';
-  const win = allDates ? null : getReportWindow_();
+  const win = getReportWindow_();
   const data = sheet.getRange(2, 1, last - 1, APP.HEADERS.RESULTS.length).getValues();
   const out = [];
   data.forEach((r, i) => {
     const status = String(r[C.FILTER_STATUS - 1] || '');
-    if (status !== 'Done') return;                     // only classified rows
+    if (status !== 'Done') return;
     const rel = String(r[C.AI_RELEVANCE - 1] || '');
-    if (!showRejected && rel === 'reject') return;
-    if (r[C.APPROVED - 1] === true) return;            // hide already-approved
-    if (win) {
-      const published = parseDateLoose_(r[C.PUBLISHED_AT - 1]);
-      if (!published || published < win.start || published > win.end) return;
+    const category = String(r[C.AI_CATEGORY - 1] || '');
+    // `category` is the sole gate (it's what report sections and
+    // approveResultRow_ key off). `relevance` is a display-only priority
+    // signal and must never hide an article `category` says to keep — see
+    // 04_AIFilter.gs for the classifier-side half of this fix.
+    if (!showRejected && category === 'reject') return;
+    if (r[C.APPROVED - 1] === true) return;
+    if (!allDates) {
+      const pub = parseDateLoose_(r[C.PUBLISHED_AT - 1]);
+      if (!pub || pub < win.start || pub > win.end) return;   // report-window only
     }
     out.push({
       row: i + 2,
       term: r[C.TERM - 1], publishedAt: r[C.PUBLISHED_AT - 1], source: r[C.SOURCE - 1],
       title: r[C.TITLE - 1], link: r[C.LINK - 1], description: r[C.DESCRIPTION - 1],
-      relevance: rel, category: r[C.AI_CATEGORY - 1], country: r[C.AI_COUNTRY - 1],
+      relevance: rel, category: category, country: r[C.AI_COUNTRY - 1],
       region: r[C.AI_REGION - 1], reason: r[C.AI_REASON - 1]
     });
   });
@@ -150,7 +208,7 @@ function api_listTriage_(params) {
 }
 
 function api_approve_(body) {
-  const targetRow = approveResultRow_(Number(body.row));
+  const targetRow = approveResultRow_(Number(body.row), false);
   return { approvedNewsRow: targetRow };
 }
 
@@ -254,30 +312,6 @@ function api_history_(params) {
       docUrl: r[H.ReportDocUrl]
     };
   });
-}
-
-/* ---------- Feedback ---------- */
-
-function api_saveFeedback_(body) {
-  const title = String((body && body.title) || '').trim();
-  if (!title) throw new Error('Title is required');
-  const type = String((body && body.type) || '').toLowerCase();
-  if (type !== 'bug' && type !== 'suggestion') throw new Error('Type must be "bug" or "suggestion"');
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(APP.SHEETS.FEEDBACK);
-  if (!sheet) {
-    sheet = ensureSheet_(ss, APP.SHEETS.FEEDBACK, APP.HEADERS.FEEDBACK);
-  }
-  const row = [
-    formatDateTime_(new Date()),
-    String((body && body.page) || 'General'),
-    type,
-    title,
-    String((body && body.description) || '')
-  ];
-  sheet.appendRow(row);
-  return { saved: true, row: sheet.getLastRow() };
 }
 
 function api_historyCountries_() {

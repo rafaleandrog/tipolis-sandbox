@@ -31,15 +31,15 @@ const APP = {
   MENU: 'Tipolis',
 
   SHEETS: {
-    TERMS: 'search_terms',
-    COUNTRIES: 'tipolis_countries',
-    RESULTS: 'search_results',
-    APPROVED: 'approved_news',
-    HISTORY: 'approved_history',
-    SETTINGS: 'report_settings',
-    LOGS: 'logs',
-    FEEDBACK: 'feedback'
-  },
+  TERMS: 'search_terms',
+  COUNTRIES: 'tipolis_countries',
+  RESULTS: 'search_results',
+  APPROVED: 'approved_news',
+  HISTORY: 'approved_history',
+  SETTINGS: 'report_settings',
+  LOGS: 'logs',
+  FEEDBACK: 'feedback'
+},
 
   HEADERS: {
     TERMS: [
@@ -67,7 +67,7 @@ const APP = {
     ],
     SETTINGS: ['key', 'value', 'description'],
     LOGS: ['DateTime', 'Step', 'Message'],
-    FEEDBACK: ['CreatedAt', 'Page', 'Type', 'Title', 'Description']
+    FEEDBACK: ['Timestamp', 'Page', 'Type', 'Title', 'Description', 'Status']
   },
 
   // Column indexes (1-based) for frequently used sheets
@@ -95,7 +95,7 @@ const APP = {
     max_results: 20,
     gemini_model: 'gemini-2.5-flash',
     daily_search_hour: 6,    // daily search runs ~06:00
-    weekly_filter_hour: 7    // daily AI filter hour (~07:00, margin after the 06:00 search)
+    weekly_filter_hour: 7    // weekly AI filter runs ~07:00 (margin after search)
   },
 
   PROPERTIES: {
@@ -113,7 +113,7 @@ const APP = {
     MAX_CONTENT_CHARS: 12000,
     NEWS_REQUEST_SPACING_MS: 1200,   // 1.2s between news requests
     FILTER_BATCH_SIZE: 60,           // articles per AI Filter execution chunk
-    GEMINI_MAX_RETRIES: 1
+    GEMINI_MAX_RETRIES: 4
   },
 
   USER_AGENT:
@@ -155,7 +155,7 @@ const SETTINGS_SEED = [
   ['report_drive_folder_id', '', 'Drive folder ID where generated reports are saved — PASTE HERE'],
   ['report_template_doc_id', '', 'Google Doc ID of the report template — PASTE HERE'],
   ['daily_search_auto_run', 'true', 'Toggle the daily search trigger'],
-  ['weekly_filter_auto_run', 'true', 'Toggle the daily AI filter trigger (key name kept for backward compatibility)'],
+  ['weekly_filter_auto_run', 'true', 'Toggle the weekly AI filter trigger'],
   ['frontend_bearer_token', '', 'Random 32+ char token the frontend must send — PASTE HERE']
 ];
 
@@ -174,10 +174,16 @@ function onOpen() {
     .addItem('Create / repair project sheets', 'createProjectSheets')
     .addSeparator()
     .addItem('Run daily search now', 'runSearchNow')
-    .addItem('Run AI filter now', 'runAIFilterNow')
+    .addItem('Run backfill search (custom days, no AI)', 'runBackfillSearchNow')
+    .addItem('Run AI classification now', 'runAIFilterNow')
+    .addItem('Fix historical relevance/category mismatches (one-off)', 'fixHistoricalRelevanceMismatchesNow')
+    .addItem('Approve checked results (build summaries)', 'approveCheckedResultsNow')
     .addSeparator()
     .addItem('Generate weekly report now', 'generateReportNow')
     .addItem('Archive & reset week', 'archiveWeekNow')
+    .addSeparator()
+    .addItem('Pause daily automation', 'pauseDailyAutomation')
+    .addItem('Resume daily automation', 'resumeDailyAutomation')
     .addSeparator()
     .addItem('Install all triggers', 'installAllTriggers')
     .addItem('Delete all triggers', 'deleteAllProjectTriggers')
@@ -199,7 +205,6 @@ function createProjectSheets() {
   ensureSheet_(ss, APP.SHEETS.HISTORY, APP.HEADERS.HISTORY);
   ensureSheet_(ss, APP.SHEETS.SETTINGS, APP.HEADERS.SETTINGS);
   ensureSheet_(ss, APP.SHEETS.LOGS, APP.HEADERS.LOGS);
-  ensureSheet_(ss, APP.SHEETS.FEEDBACK, APP.HEADERS.FEEDBACK);
 
   formatTermsSheet_(ss.getSheetByName(APP.SHEETS.TERMS));
   formatResultsSheet_(ss.getSheetByName(APP.SHEETS.RESULTS));
@@ -276,8 +281,8 @@ function runSearchNow() {
 }
 
 function runDailySearch() {
-  if (getSetting_('daily_search_auto_run') !== 'true') {
-    log_('runDailySearch', 'Skipped: daily_search_auto_run is not true.');
+  if (!isAutoRunOn_('daily_search_auto_run')) {
+    log_('runDailySearch', 'Skipped: daily search automation is paused.');
     return;
   }
   runSearchCore_('daily');
@@ -338,6 +343,89 @@ function runSearchCore_(mode) {
   }
 }
 
+// Manual backfill: search the last N days (1..30), bypass AI filter and triage.
+function runBackfillSearchNow() {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.prompt(
+    'Backfill search',
+    'How many days back to search? (1 to 30)\n\n' +
+    'Results land in search_results with FilterStatus="Skipped". ' +
+    'They are excluded from the AI filter (no Gemini cost) and from triage. ' +
+    'Browse them directly in the search_results sheet.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  const days = parseInt(String(resp.getResponseText()).trim(), 10);
+  if (!days || days < 1 || days > 30) {
+    ui.alert('Please enter a whole number between 1 and 30.');
+    return;
+  }
+  runBackfillSearchCore_(days);
+}
+
+function runBackfillSearchCore_(daysOverride) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    log_('runBackfillSearch', 'Skipped: another execution is running.');
+    return;
+  }
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const termsSheet = ss.getSheetByName(APP.SHEETS.TERMS);
+    const resultsSheet = ss.getSheetByName(APP.SHEETS.RESULTS);
+
+    // Reuse the same active terms, but override every term's window with daysOverride.
+    const baseRules = getActiveTermRules_(termsSheet);
+    if (!baseRules.length) { log_('runBackfillSearch', 'No active terms.'); return; }
+    const rules = baseRules.map(r => Object.assign({}, r, { days: daysOverride }));
+
+    const knownUrls = getKnownUrls_(resultsSheet);  // dedup against results + history
+    const rowsToAppend = [];
+    const fetchedAt = formatDateTime_(new Date());
+
+    log_('runBackfillSearch', `Started (backfill ${daysOverride}d). Active terms: ${rules.length}.`);
+
+    for (const rule of rules) {
+      try {
+        const items = fetchNewsForRule_(rule);
+        let added = 0, dup = 0, invalid = 0;
+        for (const item of items) {
+          const link = normalizeUrl_(item.link);
+          if (!link) { invalid++; continue; }
+          if (knownUrls.has(link)) { dup++; continue; }
+          if (!passesLocalMatchRule_(rule, item)) { invalid++; continue; }
+          const row = buildResultRow_(rule.term, item, fetchedAt);
+          // Mark Skipped so the AI filter and triage ignore these rows.
+          row[APP.COL.RESULTS.FILTER_STATUS - 1] = 'Skipped';
+          rowsToAppend.push(row);
+          knownUrls.add(link);
+          added++;
+        }
+        log_('runBackfillSearch',
+          `Term "${rule.term}": ${items.length} fetched, ${added} new, ${dup} dup, ${invalid} filtered.`);
+      } catch (err) {
+        log_('runBackfillSearch', `Error for "${rule.term}": ${getErrorMessage_(err)}`);
+      }
+    }
+
+    const ui = SpreadsheetApp.getUi();
+    if (rowsToAppend.length) {
+      const startRow = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
+      resultsSheet.getRange(startRow, 1, rowsToAppend.length, APP.HEADERS.RESULTS.length)
+        .setValues(rowsToAppend);
+      resultsSheet.getRange(startRow, 1, rowsToAppend.length, 1).insertCheckboxes();
+      SpreadsheetApp.flush();
+      log_('runBackfillSearch', `${rowsToAppend.length} backfill row(s) written from row ${startRow}.`);
+      ui.alert(`Backfill complete.\n\n${rowsToAppend.length} new row(s) added to search_results (FilterStatus="Skipped").`);
+    } else {
+      log_('runBackfillSearch', 'No new rows (all duplicates).');
+      ui.alert('Backfill done.\n\nNo new rows — all results were already in the sheet (URL deduplication).');
+    }
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function getActiveTermRules_(sheet) {
   const lastRow = getLastDataRowInCols_(sheet, 1, APP.HEADERS.TERMS.length);
   if (lastRow < 2) return [];
@@ -365,10 +453,11 @@ function getActiveTermRules_(sheet) {
 /* ---------- Fetching ---------- */
 
 function fetchNewsForRule_(rule) {
-  const rss = fetchFromGoogleNewsRss_(rule);
-  if (rss.length) return rss.slice(0, rule.maxResults);
-  log_('fetchNewsForRule', `RSS empty for "${rule.term}". Trying GNews fallback.`);
-  return fetchFromGNewsApi_(rule).slice(0, rule.maxResults);
+  // GNews first: it returns the real publisher URL (readable). RSS only as fallback.
+  const gnews = fetchFromGNewsApi_(rule);
+  if (gnews.length) return gnews.slice(0, rule.maxResults);
+  log_('fetchNewsForRule', `GNews empty for "${rule.term}". Trying Google News RSS fallback.`);
+  return fetchFromGoogleNewsRss_(rule).slice(0, rule.maxResults);
 }
 
 function fetchFromGoogleNewsRss_(rule) {
@@ -424,7 +513,12 @@ function fetchFromGNewsApi_(rule) {
   if (!apiKey) { log_('fetchFromGNewsApi', 'No GNews key; skipping.'); return []; }
 
   const now = new Date();
-  const fromDate = new Date(now.getTime() - rule.days * 24 * 60 * 60 * 1000);
+  // GNews free tier delays data ~12h, so a 24h window only yields ~12h of usable data.
+  // Use a wider hours-based window so delayed articles (incl. niche terms) appear.
+  // Daily run + URL dedup makes the overlap harmless. 48h ≈ 36h of usable coverage.
+  const GNEWS_LOOKBACK_HOURS = 48;
+  const lookbackMs = Math.max(GNEWS_LOOKBACK_HOURS, (rule.days || 1) * 24) * 60 * 60 * 1000;
+  const fromDate = new Date(now.getTime() - lookbackMs);
   const term = rule.matchType === 'exact' ? `"${escapeQuotes_(rule.term)}"` : rule.term;
   const params = {
     q: term, max: String(Math.min(rule.maxResults, 100)),
@@ -563,10 +657,15 @@ function callGeminiJson_(systemPrompt, userPrompt, responseSchema) {
       });
       const code = resp.getResponseCode();
       const text = resp.getContentText();
-      if (code === 429 || code >= 500) {
+      if (code === 503 || code >= 500) {
+        // Server overloaded/temporary: back off progressively and retry.
         lastErr = new Error(`Gemini HTTP ${code}: ${truncate_(text, 300)}`);
-        Utilities.sleep(2000);
+        Utilities.sleep(2000 * (attempt + 1));   // 2s, 4s, 6s, 8s
         continue;
+      }
+      if (code === 429) {
+        // Quota exhausted: retrying won't help today. Fail fast.
+        throw new Error(`Gemini HTTP 429: ${truncate_(text, 300)}`);
       }
       if (code < 200 || code >= 300) {
         throw new Error(`Gemini HTTP ${code}: ${truncate_(text, 400)}`);
@@ -599,26 +698,25 @@ function stripJsonFences_(s) {
 
 /**************************************************************
  * TIPOLIS PRESS MONITOR — 04_AIFilter.gs
- * Daily AI Filter. Classifies every search_results row whose
- * FilterStatus is not Done (relevance, category, country, region),
- * regardless of publish date. The Mon-Sun report window is applied
- * at triage time, not here. Spaces Gemini calls by GEMINI_SPACING_MS
- * to respect the free-tier RPM cap. Processes in batches to stay
- * within the 6-minute execution limit; re-arms itself with a
- * continuation trigger if work remains.
+ * Weekly AI Filter. Enforces the Mon-Sun window, then asks Gemini
+ * to classify each in-window row (relevance, category, country, region).
+ * Processes in batches to stay within the 6-minute execution limit;
+ * re-arms itself with a continuation trigger if work remains.
+ *
+ * `category` (tipolis|industry|reject) is the ONLY field that decides
+ * whether an article is kept or dropped — it's what the report sections
+ * and the triage screen both gate on. `relevance` (high|medium|low) is
+ * just a priority signal for articles that were kept; it can never be
+ * "reject" (see FILTER_BATCH_SCHEMA_ and the defensive coercion below).
  **************************************************************/
-
-// ~6.5s between Gemini calls keeps us comfortably under the
-// free-tier rate limit (~10 RPM for gemini-2.5-flash).
-const GEMINI_SPACING_MS = 6500;
 
 function runAIFilterNow() {
   runAIFilter_();
 }
 
-function runWeeklyAIFilter() {
-  if (getSetting_('weekly_filter_auto_run') !== 'true') {
-    log_('runWeeklyAIFilter', 'Skipped: weekly_filter_auto_run is not true.');
+function runDailyAIFilter() {
+  if (!isAutoRunOn_('daily_filter_auto_run')) {
+    log_('runDailyAIFilter', 'Skipped: daily AI classification automation is paused.');
     return;
   }
   runAIFilter_();
@@ -633,63 +731,167 @@ function runAIFilter_() {
     const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
     if (last < 2) { log_('runAIFilter', 'No rows to filter.'); return; }
 
-    const countriesList = getTipolisCountriesText_();
-    const systemPrompt = buildFilterSystemPrompt_(countriesList);
-
     const C = APP.COL.RESULTS;
     const data = sheet.getRange(2, 1, last - 1, APP.HEADERS.RESULTS.length).getValues();
 
-    let processed = 0;
-    const startTime = Date.now();
-    const SAFE_MS = 5 * 60 * 1000;  // leave 1 minute of margin
-
+    // 1) Collect rows needing classification. Skip Done, Error, Skipped (no loops).
+    const pending = [];
     for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      const rowNumber = i + 2;
-      const status = String(row[C.FILTER_STATUS - 1] || '');
-      if (status === 'Done') continue;
+      const status = String(data[i][C.FILTER_STATUS - 1] || '');
+      if (status === 'Done' || status === 'Error' || status === 'Skipped') continue;
+      pending.push({ rowNumber: i + 2, row: data[i] });
+    }
+    if (!pending.length) { log_('runAIFilter', 'Nothing pending.'); return; }
 
-      // Time-budget guard: re-arm continuation if running low
+    // 2) Local pre-filter: reject obvious noise WITHOUT calling Gemini.
+    const toClassify = [];
+    let preRejected = 0;
+    pending.forEach(p => {
+      const reason = prefilterReject_(
+        String(p.row[C.TITLE - 1] || ''),
+        String(p.row[C.DESCRIPTION - 1] || ''),
+        String(p.row[C.SOURCE - 1] || '')
+      );
+      if (reason) {
+        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
+          'reject', 'reject', '', '', 'Pre-filtered: ' + reason, ''
+        ]]);
+        sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Done');
+        preRejected++;
+      } else {
+        toClassify.push(p);
+      }
+    });
+    if (preRejected) { SpreadsheetApp.flush(); log_('runAIFilter', `Pre-filtered ${preRejected} noise row(s) without AI.`); }
+    if (!toClassify.length) { log_('runAIFilter', 'All pending rows pre-filtered. Done.'); return; }
+
+    // 2b) Local dedup: near-identical titles (e.g. the same wire story picked
+    // up by several outlets) are marked as duplicates of the first-seen row
+    // without spending a Gemini call. Seeded from every row already in the
+    // sheet (any FilterStatus) so it also catches duplicates fetched today.
+    const seenTitles = {};   // normalized title -> link of the first-seen row
+    data.forEach(row => {
+      const norm = normalizeTitleForDedup_(String(row[C.TITLE - 1] || ''));
+      if (norm && !seenTitles[norm]) seenTitles[norm] = normalizeUrl_(String(row[C.LINK - 1] || ''));
+    });
+    const deduped = [];
+    let duplicated = 0;
+    toClassify.forEach(p => {
+      const norm = normalizeTitleForDedup_(String(p.row[C.TITLE - 1] || ''));
+      const ownLink = normalizeUrl_(String(p.row[C.LINK - 1] || ''));
+      const originalLink = norm ? seenTitles[norm] : '';
+      if (originalLink && originalLink !== ownLink) {
+        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
+          'low', 'reject', '', '', 'Duplicate of an already-classified article this week.', originalLink
+        ]]);
+        sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Done');
+        duplicated++;
+      } else {
+        deduped.push(p);
+      }
+    });
+    if (duplicated) { SpreadsheetApp.flush(); log_('runAIFilter', `Deduped ${duplicated} near-identical title(s) without AI.`); }
+    if (!deduped.length) { log_('runAIFilter', 'All remaining rows were duplicates. Done.'); return; }
+
+    // 3) Batch the rest through Gemini (10 articles per call).
+    const systemPrompt = buildFilterSystemPrompt_(getTipolisCountriesText_());
+    const BATCH_SIZE = 10;
+    const SPACING_MS = 6500;
+    const SAFE_MS = 5 * 60 * 1000;
+    const startTime = Date.now();
+    let classified = 0;
+
+    for (let b = 0; b < deduped.length; b += BATCH_SIZE) {
       if (Date.now() - startTime > SAFE_MS) {
         scheduleFilterContinuation_();
-        log_('runAIFilter', `Time budget reached after ${processed} rows. Continuation scheduled.`);
+        log_('runAIFilter', `Time budget reached after ${classified} classified. Continuation scheduled.`);
         return;
       }
-
+      const batch = deduped.slice(b, b + BATCH_SIZE);
+      let out;
       try {
-        const userPrompt = buildFilterUserPrompt_(row);
-        const out = callGeminiJson_(systemPrompt, userPrompt, FILTER_SCHEMA_);
-        sheet.getRange(rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
-          String(out.relevance || 'low'),
-          String(out.category || 'industry'),
-          String(out.country || ''),
-          String(out.region || ''),
-          String(out.reason || ''),
-          ''   // ai_duplicate_of reserved
-        ]]);
-        sheet.getRange(rowNumber, C.FILTER_STATUS).setValue('Done');
-        processed++;
-        if (processed % 10 === 0) SpreadsheetApp.flush();
-        Utilities.sleep(GEMINI_SPACING_MS);
+        out = callGeminiJson_(systemPrompt, buildFilterBatchUserPrompt_(batch), FILTER_BATCH_SCHEMA_);
       } catch (err) {
-        sheet.getRange(rowNumber, C.FILTER_STATUS).setValue('Error');
-        sheet.getRange(rowNumber, C.AI_REASON).setValue(truncate_(getErrorMessage_(err), 200));
-        log_('runAIFilter', `Row ${rowNumber} error: ${getErrorMessage_(err)}`);
+        const msg = getErrorMessage_(err);
+        if (msg.indexOf('429') >= 0) {
+          // Daily quota reached: STOP. Leave rows Pending for the next daily run. Do NOT re-arm.
+          removeTriggersByHandler_('runDailyAIFilter_continuation');
+          log_('runAIFilter', `Gemini daily quota reached. Stopping. ${classified} classified; remaining stay Pending for tomorrow.`);
+          return;
+        }
+        batch.forEach(p => {
+          sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Error');
+          sheet.getRange(p.rowNumber, C.AI_REASON).setValue(truncate_(msg, 200));
+        });
+        log_('runAIFilter', `Batch error (non-quota): ${truncate_(msg, 200)}`);
+        continue;
       }
+
+      const results = (out && Array.isArray(out.results)) ? out.results : [];
+      const byId = {};
+      results.forEach(r => { if (r && r.id != null) byId[Number(r.id)] = r; });
+
+      batch.forEach((p, idx) => {
+        const r = byId[idx + 1] || {};
+        const category = String(r.category || 'industry');
+        let relevance = String(r.relevance || 'low');
+        // Defensive: `category` is the sole gate (see api_listTriage_). Never
+        // let a stray "reject" relevance from the model hide a kept article.
+        if (category !== 'reject' && relevance === 'reject') relevance = 'medium';
+        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
+          relevance,
+          category,
+          String(r.country || ''),
+          String(r.region || ''),
+          String(r.reason || ''),
+          ''
+        ]]);
+        sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Done');
+        classified++;
+      });
+      SpreadsheetApp.flush();
+      Utilities.sleep(SPACING_MS);
     }
-    SpreadsheetApp.flush();
-    removeTriggersByHandler_('runWeeklyAIFilter_continuation');
-    log_('runAIFilter', `Completed. Classified ${processed} row(s).`);
+
+    removeTriggersByHandler_('runDailyAIFilter_continuation');
+    log_('runAIFilter', `Completed. ${preRejected} pre-filtered, ${duplicated} deduped, ${classified} AI-classified.`);
   } finally {
     lock.releaseLock();
   }
 }
 
-function runWeeklyAIFilter_continuation() { runAIFilter_(); }
+/**
+ * One-off cleanup for rows classified before this fix: some have
+ * category "tipolis"/"industry" (kept) but a leftover relevance of
+ * "reject" from the old prompt. They're already visible in triage now
+ * that api_listTriage_ gates on category, but the stale "reject" would
+ * still show as a confusing priority badge — so tidy the column too.
+ * Safe to run more than once; only touches rows with the old contradiction.
+ */
+function fixHistoricalRelevanceMismatchesNow() {
+  const sheet = sheet_(APP.SHEETS.RESULTS);
+  const C = APP.COL.RESULTS;
+  const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
+  if (last < 2) { log_('fixHistoricalRelevanceMismatches', 'No rows.'); return; }
+  const data = sheet.getRange(2, 1, last - 1, APP.HEADERS.RESULTS.length).getValues();
+  let fixed = 0;
+  data.forEach((row, i) => {
+    const category = String(row[C.AI_CATEGORY - 1] || '');
+    const relevance = String(row[C.AI_RELEVANCE - 1] || '');
+    if ((category === 'tipolis' || category === 'industry') && relevance === 'reject') {
+      sheet.getRange(i + 2, C.AI_RELEVANCE).setValue('medium');
+      fixed++;
+    }
+  });
+  log_('fixHistoricalRelevanceMismatches', `Fixed ${fixed} row(s) with a stale relevance="reject".`);
+  try { SpreadsheetApp.getUi().alert(`Fixed ${fixed} row(s) that had a contradictory relevance="reject".`); } catch (e) { /* editor run: no UI */ }
+}
+
+function runDailyAIFilter_continuation() { runAIFilter_(); }
 
 function scheduleFilterContinuation_() {
-  removeTriggersByHandler_('runWeeklyAIFilter_continuation');
-  ScriptApp.newTrigger('runWeeklyAIFilter_continuation')
+  removeTriggersByHandler_('runDailyAIFilter_continuation');
+  ScriptApp.newTrigger('runDailyAIFilter_continuation')
     .timeBased().after(60 * 1000).create();
 }
 
@@ -704,14 +906,92 @@ function buildFilterSystemPrompt_(countriesText) {
     '',
     'Tracked projects: Próspera, Destiny, ZEDE, SSZ, Gelephu Mindfulness City, TechParkCV, Sherbro Island, Alpha Cities, Network States, Charter Cities.',
     '',
-    'Classify the article and return JSON only.',
-    'Rules:',
-    '- "reject": mentions a priority country but for an unrelated topic (sports, weather, entertainment, generic crime); or promotional/opinion-only/fact-free.',
+    'You will receive MULTIPLE articles, each with a numeric "id". Classify EACH one and return JSON only as {"results": [ ... ]}, with exactly one entry per article, echoing its "id".',
+    'Rules per article:',
+    '- "category" is the ONLY field that decides whether the article is kept. Set it to "reject" when: it mentions a priority country but for an unrelated topic (sports, weather, entertainment, generic crime, public health, culture); or it is promotional/opinion-only/fact-free.',
     '- "tipolis": ties a priority country OR a tracked project to a relevant topic (SEZ, free zone, private city, charter city, governance, investment, infrastructure, citizenship, regulatory reform).',
     '- "industry": SEZs / free zones / private cities / charter cities / network states / regulatory sandboxes / governance innovation / industrial corridors / technology hubs in a country NOT on the priority list.',
     '- Ties go to "tipolis" when any clear link to a priority country/project exists.',
+    '- "relevance" is NEVER "reject" and never contradicts "category": it is only a priority signal (high/medium/low) for how strongly to feature an article whose category is "tipolis" or "industry". If category is "reject", set relevance to "low".',
     '- country: canonical English name, or "Multiple", or "Global". region: one of Africa, Caribbean, Latin America, North America, Europe, Middle East, South Asia, Southeast Asia, East Asia, Oceania, Global.'
   ].join('\n');
+}
+
+function buildFilterBatchUserPrompt_(batch) {
+  const C = APP.COL.RESULTS;
+  const parts = ['Classify each article below. Return {"results":[...]} with one entry per id.', ''];
+  batch.forEach((p, idx) => {
+    const row = p.row;
+    parts.push(`--- id: ${idx + 1} ---`);
+    parts.push(`Source: ${row[C.SOURCE - 1]}`);
+    parts.push(`Title: ${row[C.TITLE - 1]}`);
+    parts.push(`Description: ${truncate_(String(row[C.DESCRIPTION - 1] || ''), 400)}`);
+    parts.push(`Search term: ${row[C.TERM - 1]}`);
+    parts.push('');
+  });
+  return parts.join('\n');
+}
+
+const FILTER_BATCH_SCHEMA_ = {
+  type: 'object',
+  properties: {
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          relevance: { type: 'string', enum: ['high', 'medium', 'low'] },
+          category: { type: 'string', enum: ['tipolis', 'industry', 'reject'] },
+          country: { type: 'string' },
+          region: { type: 'string' },
+          reason: { type: 'string' }
+        },
+        required: ['id', 'relevance', 'category', 'country', 'region', 'reason']
+      }
+    }
+  },
+  required: ['results']
+};
+
+// Cheap text rules to drop obvious noise before spending a Gemini call.
+function prefilterReject_(title, description, source) {
+  const text = (String(title) + ' ' + String(description) + ' ' + String(source)).toLowerCase();
+  const noise = [
+    'world cup', 'fifa', 'copa do mundo', 'copa libertadores', 'copa sudamericana',
+    'libertadores', 'sudamericana', 'concacaf', 'world cup squad', 'world cup team',
+    'world cup tickets', 'kick-off', ' fixtures', 'live stream', 'tv channel',
+    'tv schedule', 'where to watch', 'how to buy', ' stadium', 'soccer', 'softball',
+    'playoffs', ' u20', ' u16', 'wushu', 'trail race', 'backyard ultra', 'big bike',
+    'roland garros', 'pga tour', 'kia open',
+    'tobacco-free', 'smoke-free', 'lpg-free', 'fmd-free', 'human-free zone',
+    'zionist free zone', 'png target', 'png rollout',
+    'prospera energy', 'prospera financial',
+    'ben nevis', 'park rapids', 'red lake', 'centenarian',
+    'sewage', 'straight through processing', 'sebi', 'okhla', 'stp infra',
+    'pond rejuvenation',
+    'music video', 'art on display', 'paintings from', 'galleries night',
+    'literary prize', 'exposição', 'concerto', 'documentário', 'pillow cover',
+    'capital of', 'wuling',
+    'ebola', 'ébola', 'hantavirus', 'hantavírus', 'measles', 'rodent-borne',
+    'iguanas', 'sea turtles', 'tartarugas'
+  ];
+  for (let i = 0; i < noise.length; i++) {
+    if (text.indexOf(noise[i]) >= 0) return noise[i];
+  }
+  return null;
+}
+
+// Lowercases, strips accents/punctuation, and collapses whitespace so
+// near-identical headlines from different outlets compare equal. Titles
+// shorter than 12 normalized chars are treated as "no signal" (too generic
+// to safely dedup on) and return ''.
+function normalizeTitleForDedup_(title) {
+  const t = String(title || '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  return t.length >= 12 ? t : '';
 }
 
 function buildFilterUserPrompt_(row) {
@@ -728,7 +1008,7 @@ function buildFilterUserPrompt_(row) {
 const FILTER_SCHEMA_ = {
   type: 'object',
   properties: {
-    relevance: { type: 'string', enum: ['high', 'medium', 'low', 'reject'] },
+    relevance: { type: 'string', enum: ['high', 'medium', 'low'] },
     category: { type: 'string', enum: ['tipolis', 'industry', 'reject'] },
     country: { type: 'string' },
     region: { type: 'string' },
@@ -762,7 +1042,7 @@ function getTipolisCountriesText_() {
  * Copies to approved_news, then generates the AI summary.
  * Called by the frontend (/triage/approve) and by the manual menu.
  */
-function approveResultRow_(resultsRowNumber) {
+function approveResultRow_(resultsRowNumber, buildSummary) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const results = ss.getSheetByName(APP.SHEETS.RESULTS);
   const approved = ss.getSheetByName(APP.SHEETS.APPROVED);
@@ -796,11 +1076,15 @@ function approveResultRow_(resultsRowNumber) {
     'Pending',                         // Edit_Status
     nextOrder                          // Display_Order
   ];
-  approved.appendRow(newRow);
-  const targetRow = approved.getLastRow();
+  const targetRow = getNextEmptyRowInCols_(approved, 1, APP.HEADERS.APPROVED.length);
+  approved.getRange(targetRow, 1, 1, APP.HEADERS.APPROVED.length).setValues([newRow]);
   results.getRange(resultsRowNumber, C.APPROVED).setValue(true);
 
-  generateSummaryForApprovedRow_(targetRow);
+  // Only build the summary inline when explicitly asked (menu batch).
+  // The web approve path skips this so the HTTP call returns fast (no timeout).
+  if (buildSummary) {
+    generateSummaryForApprovedRow_(targetRow);
+  }
   return targetRow;
 }
 
@@ -814,9 +1098,10 @@ function generateSummaryForApprovedRow_(rowNumber) {
   const row = approved.getRange(rowNumber, 1, 1, APP.HEADERS.APPROVED.length).getValues()[0];
 
   try {
+    const pageText = fetchArticleText_(String(row[A.LINK - 1] || ''));   // read the real page
     const out = callGeminiJson_(
       getSummarySystemPrompt_(),
-      buildSummaryUserPrompt_(row),
+      buildSummaryUserPrompt_(row, pageText),
       SUMMARY_SCHEMA_
     );
     const payload = JSON.stringify({
@@ -824,10 +1109,11 @@ function generateSummaryForApprovedRow_(rowNumber) {
       bullets: Array.isArray(out.bullets) ? out.bullets.map(String) : []
     });
     approved.getRange(rowNumber, A.AI_BULLETS_RAW).setValue(payload);
-    // Seed Edited_Bullets with the raw bullets so the editor starts populated.
     approved.getRange(rowNumber, A.EDITED_BULLETS).setValue(payload);
     approved.getRange(rowNumber, A.AI_STATUS).setValue('Done');
-    log_('generateSummary', `Summary generated for approved_news row ${rowNumber}.`);
+    log_('generateSummary',
+      `Summary generated for approved_news row ${rowNumber}` +
+      (pageText ? ' (full article text).' : ' (feed text only — page not fetchable).'));
   } catch (err) {
     approved.getRange(rowNumber, A.AI_STATUS).setValue('Error: ' + truncate_(getErrorMessage_(err), 150));
     log_('generateSummary', `Row ${rowNumber} error: ${getErrorMessage_(err)}`);
@@ -848,13 +1134,20 @@ function getSummarySystemPrompt_() {
     'No opinions, no promotion, no filler, no "the article says". Never invent facts.',
     'Include controversy, opposition, regulatory risk, or pending approval when present.',
     'Allowed inline formatting: markdown links (max 1 per bullet, to authoritative sources for named programs, never the source publication); **bold** for headline money values or anchor place names; *italic* for project names on first mention; comparative bullets "**Actor:** ..." only when comparing 3+ peers.',
-    'headline_line format: "Source: [**Headline**](URL)".',
+    'headline_line format: "<PUBLICATION NAME>: [**<Headline>**](<URL>)". Replace <PUBLICATION NAME> with the actual source name provided; never write the literal word "Source".',
     'Return JSON only.'
   ].join(' ');
 }
 
-function buildSummaryUserPrompt_(row) {
+function buildSummaryUserPrompt_(row, fetchedText) {
   const A = APP.COL.APPROVED;
+  const feedDesc = String(row[A.DESCRIPTION - 1] || '');
+  const feedContent = String(row[A.CONTENT - 1] || '');
+  const articleText = String(fetchedText || '').trim();
+  // Use the fetched page when it's richer than the feed snippet; otherwise fall back.
+  const bodyText = (articleText && articleText.length > feedContent.length)
+    ? articleText
+    : (feedContent || feedDesc);
   return [
     `Source: ${row[A.SOURCE - 1]}`,
     `Title: ${row[A.TITLE - 1]}`,
@@ -863,11 +1156,8 @@ function buildSummaryUserPrompt_(row) {
     `Country: ${row[A.COUNTRY - 1]}`,
     `Category: ${row[A.CATEGORY - 1]}`,
     '',
-    'Description:',
-    truncate_(String(row[A.DESCRIPTION - 1] || ''), 3000),
-    '',
-    'Content:',
-    truncate_(String(row[A.CONTENT - 1] || ''), APP.LIMITS.MAX_CONTENT_CHARS)
+    'Article text (use this as the primary source; do not invent beyond it):',
+    truncate_(bodyText, APP.LIMITS.MAX_CONTENT_CHARS)
   ].join('\n');
 }
 
@@ -890,7 +1180,7 @@ function approveCheckedResultsNow() {
   let count = 0;
   for (let r = 2; r <= last; r++) {
     if (results.getRange(r, APP.COL.RESULTS.APPROVED).getValue() === true) {
-      if (approveResultRow_(r)) count++;
+      if (approveResultRow_(r, true)) count++;
     }
   }
   log_('approveCheckedResultsNow', `Approved ${count} row(s).`);
@@ -991,25 +1281,47 @@ function injectSection_(body, placeholder, items) {
   let index = body.getChildIndex(placeholderPara.asParagraph());
 
   if (!items.length) {
-    const p = body.insertParagraph(index, 'No significant news this week.');
-    p.setAttributes({}); // inherit default
-    placeholderPara.removeFromParent();
-    return;
-  }
+  const p = body.insertParagraph(index, 'No significant news this week.');
+  p.setAttributes({}); // inherit default
+  removePlaceholderParagraph_(body, placeholderPara);
+  return;
+}
 
-  items.forEach(item => {
-    const headItem = body.insertListItem(index++, '');
-    headItem.setGlyphType(DocumentApp.GlyphType.BULLET).setNestingLevel(0);
-    applyMarkdownToListItem_(headItem, item.headline);
+  // Hanging indent (like the good W23 report): the bullet marker sits at firstLine,
+// and the text wraps aligned at "start". HEAD ~0.63cm, BULLET ~1.25cm.
+const HEAD_START = 18;    // 0.63 cm — where headline text aligns
+const HEAD_FIRST = 0;     // marker position for headline
+const BULLET_START = 35;  // 1.25 cm — where bullet text aligns
+const BULLET_FIRST = 18;  // marker position for sub-bullets
 
-    item.bullets.forEach(b => {
-      const li = body.insertListItem(index++, '');
-      li.setGlyphType(DocumentApp.GlyphType.BULLET).setNestingLevel(1);
-      applyMarkdownToListItem_(li, b);
-    });
-  });
+items.forEach(item => {
+  const headItem = body.insertListItem(index++, '');
+  headItem.setGlyphType(DocumentApp.GlyphType.BULLET).setNestingLevel(0);
+  headItem.setIndentStart(HEAD_START).setIndentFirstLine(HEAD_FIRST);
+  headItem.setLineSpacing(1.15).setSpacingBefore(0).setSpacingAfter(4);
+  applyMarkdownToListItem_(headItem, item.headline);
 
+  item.bullets.forEach(b => {
+  const li = body.insertListItem(index++, '');
+  li.setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET).setNestingLevel(1);
+  li.setIndentStart(BULLET_START).setIndentFirstLine(BULLET_FIRST);
+  li.setLineSpacing(1.15).setSpacingBefore(0).setSpacingAfter(2);
+  applyMarkdownToListItem_(li, b);
+});
+});
+
+removePlaceholderParagraph_(body, placeholderPara);
+}
+
+// Removes the placeholder paragraph. If it's the last paragraph in the document
+// (which Docs forbids removing), clears its text instead so {{...}} doesn't show.
+function removePlaceholderParagraph_(body, placeholderPara) {
+try {
   placeholderPara.removeFromParent();
+} catch (e) {
+  // Last paragraph of the section can't be removed; blank it out instead.
+  placeholderPara.asParagraph().clear();
+}
 }
 
 /* ---------- Inline markdown -> Doc formatting ---------- */
@@ -1020,14 +1332,14 @@ function applyMarkdownToListItem_(listItem, markdownText) {
   t.setText('');
   let pos = 0;
   segments.forEach(seg => {
-    if (!seg.text) return;
-    t.appendText(seg.text);
-    const end = pos + seg.text.length - 1;
-    if (seg.bold) t.setBold(pos, end, true);
-    if (seg.italic) t.setItalic(pos, end, true);
-    if (seg.url) t.setLinkUrl(pos, end, seg.url);
-    pos = end + 1;
-  });
+  if (!seg.text) return;
+  t.appendText(seg.text);
+  const end = pos + seg.text.length - 1;
+  t.setBold(pos, end, seg.bold === true);
+  t.setItalic(pos, end, seg.italic === true);
+  if (seg.url) t.setLinkUrl(pos, end, seg.url);
+  pos = end + 1;
+});
 }
 
 /**
@@ -1156,29 +1468,27 @@ function clearDataRows_(sheet, numCols) {
 
 /**************************************************************
  * TIPOLIS PRESS MONITOR — 08_Triggers.gs
- * Installs the daily search and daily AI filter triggers.
+ * Installs the daily search and weekly AI filter triggers.
  **************************************************************/
 
 function installAllTriggers() {
   removeTriggersByHandler_('runDailySearch');
-  removeTriggersByHandler_('runWeeklyAIFilter');
-  removeTriggersByHandler_('runWeeklyAIFilter_continuation');
+  removeTriggersByHandler_('runWeeklyAIFilter');              // legacy cleanup
+  removeTriggersByHandler_('runWeeklyAIFilter_continuation'); // legacy cleanup
+  removeTriggersByHandler_('runDailyAIFilter');
+  removeTriggersByHandler_('runDailyAIFilter_continuation');
 
-  // Daily search ~06:00 every day.
   ScriptApp.newTrigger('runDailySearch')
     .timeBased().everyDays(1).atHour(APP.DEFAULTS.daily_search_hour).create();
 
-  // Daily AI filter ~07:00 every day (margin after the 06:00 search).
-  // Handler name kept as runWeeklyAIFilter to avoid drift with the live
-  // deployment; the cadence change is in the trigger, not in the code.
-  ScriptApp.newTrigger('runWeeklyAIFilter')
+  ScriptApp.newTrigger('runDailyAIFilter')
     .timeBased().everyDays(1).atHour(APP.DEFAULTS.weekly_filter_hour).create();
 
-  log_('installAllTriggers', 'Daily search + daily AI filter triggers installed.');
+  log_('installAllTriggers', 'Daily search + daily AI classification triggers installed.');
   SpreadsheetApp.getUi().alert(
     'Triggers installed:\n' +
     `- Daily search ~${APP.DEFAULTS.daily_search_hour}:00\n` +
-    `- Daily AI filter ~${APP.DEFAULTS.weekly_filter_hour}:00`
+    `- Daily AI classification ~${APP.DEFAULTS.weekly_filter_hour}:00`
   );
 }
 
@@ -1251,8 +1561,9 @@ function handleRequest_(e, method) {
 
       case 'POST /search/run':      return jsonOut_({ ok: true, data: (runSearchNow(), { started: true }) });
       case 'POST /filter/run':      return jsonOut_({ ok: true, data: (runAIFilterNow(), { started: true }) });
+      case 'POST /feedback':        return jsonOut_({ ok: true, data: api_submitFeedback_(body) });
 
-      case 'POST /feedback':        return jsonOut_({ ok: true, data: api_saveFeedback_(body) });
+      case 'POST /summary/build':   return jsonOut_({ ok: true, data: api_buildPendingSummaries_(body) });
 
       default: return jsonOut_({ ok: false, error: 'Unknown route: ' + route });
     }
@@ -1265,6 +1576,58 @@ function handleRequest_(e, method) {
 function jsonOut_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function api_submitFeedback_(body) {
+const ss = SpreadsheetApp.getActiveSpreadsheet();
+let sheet = ss.getSheetByName(APP.SHEETS.FEEDBACK);
+// Auto-create the sheet if it doesn't exist yet.
+if (!sheet) {
+  sheet = ss.insertSheet(APP.SHEETS.FEEDBACK);
+  sheet.getRange(1, 1, 1, APP.HEADERS.FEEDBACK.length).setValues([APP.HEADERS.FEEDBACK]);
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, APP.HEADERS.FEEDBACK.length).setFontWeight('bold').setBackground('#f1f3f4');
+}
+const page = String(body.page || '').trim();
+const type = String(body.type || '').trim().toLowerCase();
+const title = String(body.title || '').trim();
+const description = String(body.description || '').trim();
+// Light validation: title is required; type must be bug or suggestion.
+if (!title) throw new Error('Title is required.');
+if (type !== 'bug' && type !== 'suggestion') throw new Error('Type must be bug or suggestion.');
+const row = getNextEmptyRowInCols_(sheet, 1, APP.HEADERS.FEEDBACK.length);
+sheet.getRange(row, 1, 1, APP.HEADERS.FEEDBACK.length).setValues([[
+  formatDateTime_(new Date()), page, type, title, description, 'New'
+]]);
+log_('feedback', `New ${type} on "${page}": ${truncate_(title, 80)}`);
+return { saved: true, row: row };
+}
+
+function api_buildPendingSummaries_(body) {
+const ss = SpreadsheetApp.getActiveSpreadsheet();
+const approved = ss.getSheetByName(APP.SHEETS.APPROVED);
+const A = APP.COL.APPROVED;
+const last = getLastDataRowInCols_(approved, 1, APP.HEADERS.APPROVED.length);
+if (last < 2) return { built: 0, remaining: 0 };
+
+// How many to build in this call (keep small so the request returns before timeout).
+const MAX_PER_CALL = (body && Number(body.max)) ? Number(body.max) : 2;
+
+const statuses = approved.getRange(2, A.AI_STATUS, last - 1, 1).getValues();
+let built = 0, remaining = 0;
+for (let i = 0; i < statuses.length; i++) {
+  const status = String(statuses[i][0] || '');
+  const needs = (status === '' || status === 'Pending' || status.indexOf('Error') === 0);
+  if (!needs) continue;
+  if (built < MAX_PER_CALL) {
+    generateSummaryForApprovedRow_(i + 2);   // row number
+    built++;
+  } else {
+    remaining++;
+  }
+}
+log_('buildPendingSummaries', `Built ${built}, ${remaining} still pending.`);
+return { built: built, remaining: remaining };
 }
 
 /* ---------- Terms ---------- */
@@ -1326,24 +1689,29 @@ function api_listTriage_(params) {
   if (last < 2) return [];
   const showRejected = params && params.showRejected === 'true';
   const allDates = params && params.allDates === 'true';
-  const win = allDates ? null : getReportWindow_();
+  const win = getReportWindow_();
   const data = sheet.getRange(2, 1, last - 1, APP.HEADERS.RESULTS.length).getValues();
   const out = [];
   data.forEach((r, i) => {
     const status = String(r[C.FILTER_STATUS - 1] || '');
-    if (status !== 'Done') return;                     // only classified rows
+    if (status !== 'Done') return;
     const rel = String(r[C.AI_RELEVANCE - 1] || '');
-    if (!showRejected && rel === 'reject') return;
-    if (r[C.APPROVED - 1] === true) return;            // hide already-approved
-    if (win) {
-      const published = parseDateLoose_(r[C.PUBLISHED_AT - 1]);
-      if (!published || published < win.start || published > win.end) return;
+    const category = String(r[C.AI_CATEGORY - 1] || '');
+    // `category` is the sole gate (it's what report sections and
+    // approveResultRow_ key off). `relevance` is a display-only priority
+    // signal and must never hide an article `category` says to keep — see
+    // 04_AIFilter.gs for the classifier-side half of this fix.
+    if (!showRejected && category === 'reject') return;
+    if (r[C.APPROVED - 1] === true) return;
+    if (!allDates) {
+      const pub = parseDateLoose_(r[C.PUBLISHED_AT - 1]);
+      if (!pub || pub < win.start || pub > win.end) return;   // report-window only
     }
     out.push({
       row: i + 2,
       term: r[C.TERM - 1], publishedAt: r[C.PUBLISHED_AT - 1], source: r[C.SOURCE - 1],
       title: r[C.TITLE - 1], link: r[C.LINK - 1], description: r[C.DESCRIPTION - 1],
-      relevance: rel, category: r[C.AI_CATEGORY - 1], country: r[C.AI_COUNTRY - 1],
+      relevance: rel, category: category, country: r[C.AI_COUNTRY - 1],
       region: r[C.AI_REGION - 1], reason: r[C.AI_REASON - 1]
     });
   });
@@ -1351,7 +1719,7 @@ function api_listTriage_(params) {
 }
 
 function api_approve_(body) {
-  const targetRow = approveResultRow_(Number(body.row));
+  const targetRow = approveResultRow_(Number(body.row), false);
   return { approvedNewsRow: targetRow };
 }
 
@@ -1457,30 +1825,6 @@ function api_history_(params) {
   });
 }
 
-/* ---------- Feedback ---------- */
-
-function api_saveFeedback_(body) {
-  const title = String((body && body.title) || '').trim();
-  if (!title) throw new Error('Title is required');
-  const type = String((body && body.type) || '').toLowerCase();
-  if (type !== 'bug' && type !== 'suggestion') throw new Error('Type must be "bug" or "suggestion"');
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(APP.SHEETS.FEEDBACK);
-  if (!sheet) {
-    sheet = ensureSheet_(ss, APP.SHEETS.FEEDBACK, APP.HEADERS.FEEDBACK);
-  }
-  const row = [
-    formatDateTime_(new Date()),
-    String((body && body.page) || 'General'),
-    type,
-    title,
-    String((body && body.description) || '')
-  ];
-  sheet.appendRow(row);
-  return { saved: true, row: sheet.getLastRow() };
-}
-
 function api_historyCountries_() {
   const sheet = sheet_(APP.SHEETS.HISTORY);
   const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.HISTORY.length);
@@ -1521,6 +1865,33 @@ function getSetting_(key) {
   return '';
 }
 
+// Missing/blank/true => ON. Only an explicit off value pauses it.
+function isAutoRunOn_(key) {
+  const v = String(getSetting_(key) || '').trim().toLowerCase();
+  return v !== 'false' && v !== 'off' && v !== '0' && v !== 'no';
+}
+
+function pauseDailyAutomation() {
+  setSetting_('daily_search_auto_run', 'false');
+  setSetting_('daily_filter_auto_run', 'false');
+  log_('automation', 'Daily automation PAUSED (search + AI classification).');
+  SpreadsheetApp.getUi().alert(
+    'Automação diária PAUSADA.\n\n' +
+    'A busca das 06h e a classificação das 07h não vão rodar até você religar. ' +
+    'Os comandos manuais do menu continuam funcionando normalmente.'
+  );
+}
+
+function resumeDailyAutomation() {
+  setSetting_('daily_search_auto_run', 'true');
+  setSetting_('daily_filter_auto_run', 'true');
+  log_('automation', 'Daily automation RESUMED (search + AI classification).');
+  SpreadsheetApp.getUi().alert(
+    'Automação diária RELIGADA.\n\n' +
+    'Busca diária (~06h) e classificação (~07h) estão ativas de novo.'
+  );
+}
+
 function setSetting_(key, value) {
   const sheet = sheet_(APP.SHEETS.SETTINGS);
   const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.SETTINGS.length);
@@ -1537,9 +1908,9 @@ function setSetting_(key, value) {
 }
 
 /* ---------- Week math ----------
- * Report runs on Monday. The window it covers is the previous full week:
- * previous Monday 00:00:00 to previous Sunday 23:59:59.
- */
+* Report runs on Monday. The window it covers is the previous full week:
+* previous Monday 00:00:00 to previous Sunday 23:59:59.
+*/
 function getReportWindow_() {
   const now = new Date();
   const daysSinceMonday = (now.getDay() + 6) % 7;     // 0 if Monday
@@ -1700,4 +2071,356 @@ function log_(step, message) {
   const row = getNextEmptyRowInCols_(sheet, 1, APP.HEADERS.LOGS.length);
   sheet.getRange(row, 1, 1, APP.HEADERS.LOGS.length)
     .setValues([[formatDateTime_(new Date()), step, message]]);
+}
+
+// Fetches the real article page so the summary is built from full text, not just the feed snippet.
+// Falls back to '' on paywalls, bot-blocks, JS-rendered pages, or any error.
+function fetchArticleText_(url) {
+  if (!url) return '';
+  try {
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'get', muteHttpExceptions: true, followRedirects: true,
+      headers: { 'User-Agent': APP.USER_AGENT, 'Accept': 'text/html,application/xhtml+xml,*/*' }
+    });
+    const code = resp.getResponseCode();
+    if (code < 200 || code >= 300) {
+      log_('fetchArticleText', `HTTP ${code} for ${truncate_(String(url), 120)}`);
+      return '';
+    }
+    let html = resp.getContentText();
+    if (!html) return '';
+    // Drop scripts/styles/comments, then prefer the <article> block if present.
+    html = html.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+              .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+              .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+              .replace(/<!--[\s\S]*?-->/g, ' ');
+    const articleMatch = html.match(/<article[\s\S]*?<\/article>/i);
+    if (articleMatch) html = articleMatch[0];
+    const text = cleanText_(html);   // strips tags, decodes entities, collapses whitespace
+    return text.length >= 200 ? truncate_(text, APP.LIMITS.MAX_CONTENT_CHARS) : '';
+  } catch (err) {
+    log_('fetchArticleText', `Error for ${truncate_(String(url), 120)}: ${getErrorMessage_(err)}`);
+    return '';
+  }
+}
+
+/* ============================================================
+* ARTICLE READING TEST KIT (no AI, no changes to existing flow)
+* Run testArticleReading from the editor; results go to the logs sheet.
+* ============================================================ */
+
+function testArticleReading() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(APP.SHEETS.RESULTS);
+  var C = APP.COL.RESULTS;
+  var last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
+  if (last < 2) { log_('testRead', 'No rows in search_results.'); return; }
+
+  var SAMPLE = 8;  // how many links to test
+  var data = sheet.getRange(2, 1, last - 1, APP.HEADERS.RESULTS.length).getValues();
+  var picked = [];
+  for (var i = 0; i < data.length && picked.length < SAMPLE; i++) {
+    var link = String(data[i][C.LINK - 1] || '').trim();
+    if (link) picked.push({ row: i + 2, link: link, title: String(data[i][C.TITLE - 1] || '') });
+  }
+  if (!picked.length) { log_('testRead', 'No rows with a link.'); return; }
+
+  log_('testRead', '=== Article reading test: ' + picked.length + ' links ===');
+  var fullOk = 0, thin = 0;
+  picked.forEach(function (p) {
+    var isGN = p.link.indexOf('news.google.com') >= 0;
+    var resolved = resolveArticleUrl_(p.link);
+    var fetchUrl = resolved || p.link;
+    var chars = countArticleChars_(fetchUrl);
+    var label = isGN ? (resolved ? 'GN->resolved' : 'GN->UNRESOLVED') : 'direct';
+    if (chars >= 600) fullOk++; else thin++;
+    log_('testRead',
+      'Row ' + p.row + ' [' + label + '] ' + chars + ' chars | ' +
+      truncate_(p.title, 45) + ' | ' + truncate_(fetchUrl, 90));
+    Utilities.sleep(800);
+  });
+  log_('testRead', '=== Summary: ' + fullOk + ' full-text OK, ' + thin +
+    ' thin/failed (of ' + picked.length + ') ===');
+  try {
+    SpreadsheetApp.getUi().alert(
+      'Article reading test done.\n\n' +
+      fullOk + ' of ' + picked.length + ' links returned full article text.\n' +
+      'Open the logs sheet for per-link details.'
+    );
+  } catch (e) { /* running from editor: no UI, results are in logs */ }
+}
+
+// Fetch + clean a page and return the character count (no threshold, for diagnosis).
+function countArticleChars_(url) {
+  if (!url) return 0;
+  try {
+    var resp = UrlFetchApp.fetch(url, {
+      method: 'get', muteHttpExceptions: true, followRedirects: true,
+      headers: { 'User-Agent': APP.USER_AGENT, 'Accept': 'text/html,application/xhtml+xml,*/*' }
+    });
+    if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) return 0;
+    var html = resp.getContentText();
+    if (!html) return 0;
+    html = html.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+              .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+              .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+              .replace(/<!--[\s\S]*?-->/g, ' ');
+    var am = html.match(/<article[\s\S]*?<\/article>/i);
+    if (am) html = am[0];
+    return cleanText_(html).length;
+  } catch (e) {
+    return 0;
+  }
+}
+
+// Returns the real publisher URL, or null if it can't be resolved.
+function resolveArticleUrl_(url) {
+  if (!url) return null;
+  if (url.indexOf('news.google.com') < 0) return url;   // already a direct URL (e.g. from GNews)
+  var m = url.match(/\/(?:rss\/)?articles\/([^?\/]+)/) || url.match(/\/read\/([^?\/]+)/);
+  if (!m) return null;
+  var articleId = m[1];
+  var decoded = decodeGoogleNewsBase64_(articleId);   // cheap path (old-format links)
+  if (decoded) return decoded;
+  return resolveViaBatchExecute_(articleId);           // fragile path (new-format links)
+}
+
+// Old-format Google News links: the real URL is embedded in the base64 blob.
+function decodeGoogleNewsBase64_(articleId) {
+  try {
+    var bytes;
+    try { bytes = Utilities.base64DecodeWebSafe(articleId); }
+    catch (e1) {
+      var b64 = articleId.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      bytes = Utilities.base64Decode(b64);
+    }
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] & 0xff);
+    var m = s.match(/https?:\/\/[A-Za-z0-9._~:\/?#\[\]@!$&'()*+,;=%-]+/);
+    if (m && m[0].indexOf('google.com') < 0) return m[0];
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// New-format Google News links: ask Google's internal endpoint for the real URL.
+function resolveViaBatchExecute_(articleId) {
+  try {
+    var page = UrlFetchApp.fetch('https://news.google.com/rss/articles/' + articleId, {
+      method: 'get', muteHttpExceptions: true, followRedirects: true,
+      headers: { 'User-Agent': APP.USER_AGENT }
+    });
+    if (page.getResponseCode() !== 200) return null;
+    var html = page.getContentText();
+    var sgM = html.match(/data-n-a-sg="([^"]+)"/);
+    var tsM = html.match(/data-n-a-ts="([^"]+)"/);
+    if (!sgM || !tsM) return null;
+
+    var inner = JSON.stringify([
+      'garturlreq',
+      [['X','X',['X','X'],null,null,1,1,'US:en',null,1,null,null,null,null,null,0,1],
+      'X','X',1,[1,1,1],1,1,null,0,0,null,0],
+      articleId, Number(tsM[1]), sgM[1]
+    ]);
+    var freq = JSON.stringify([[['Fbv4je', inner, null, 'generic']]]);
+
+    var resp = UrlFetchApp.fetch(
+      'https://news.google.com/_/DotsSplashUi/data/batchexecute',
+      { method: 'post', muteHttpExceptions: true,
+        contentType: 'application/x-www-form-urlencoded;charset=UTF-8',
+        payload: 'f.req=' + encodeURIComponent(freq),
+        headers: { 'User-Agent': APP.USER_AGENT } }
+    );
+    if (resp.getResponseCode() !== 200) return null;
+
+    var un = resp.getContentText()
+      .replace(/\\u003d/g, '=').replace(/\\u0026/g, '&')
+      .replace(/\\\//g, '/').replace(/\\"/g, '"');
+    var found = un.match(/https?:\/\/[^"\\\s]+/g) || [];
+    for (var i = 0; i < found.length; i++) {
+      if (found[i].indexOf('google.com') < 0 && found[i].indexOf('gstatic.com') < 0) {
+        return found[i];
+      }
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/* ============================================================
+* ARTICLE READING TEST V2 — run AFTER inverting search + a fresh search.
+* Reads the NEWEST rows (which now come from GNews = real URLs).
+* Reuses countArticleChars_ from the previous test kit (keep it).
+* No AI calls. Results go to the logs sheet (Step = testReadV2).
+* ============================================================ */
+
+function testArticleReadingV2() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(APP.SHEETS.RESULTS);
+  var C = APP.COL.RESULTS;
+  var last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
+  if (last < 2) { log_('testReadV2', 'No rows in search_results.'); return; }
+
+  var SAMPLE = 8;
+  var startRow = Math.max(2, last - 40);          // scan the last ~40 rows (newest)
+  var height = last - startRow + 1;
+  var data = sheet.getRange(startRow, 1, height, APP.HEADERS.RESULTS.length).getValues();
+
+  var picked = [];
+  for (var i = data.length - 1; i >= 0 && picked.length < SAMPLE; i--) {
+    var link = String(data[i][C.LINK - 1] || '').trim();
+    if (link) picked.push({ row: startRow + i, link: link, title: String(data[i][C.TITLE - 1] || '') });
+  }
+  if (!picked.length) { log_('testReadV2', 'No rows with a link.'); return; }
+
+  log_('testReadV2', 'TEST START: reading ' + picked.length + ' newest links');
+  var fullOk = 0, thin = 0, redirects = 0;
+  picked.forEach(function (p) {
+    var isGN = p.link.indexOf('news.google.com') >= 0;
+    if (isGN) redirects++;
+    var chars = countArticleChars_(p.link);       // read the page directly, count chars
+    if (chars >= 600) fullOk++; else thin++;
+    var label = isGN ? 'google-news-redirect' : 'direct';
+    log_('testReadV2',
+      'Row ' + p.row + ' [' + label + '] ' + chars + ' chars | ' +
+      truncate_(p.title, 45) + ' | ' + truncate_(p.link, 90));
+    Utilities.sleep(800);
+  });
+  log_('testReadV2', 'TEST SUMMARY: ' + fullOk + ' full-text OK, ' + thin +
+    ' thin/failed, ' + redirects + ' still google-news redirects (of ' + picked.length + ')');
+  try {
+    SpreadsheetApp.getUi().alert(
+      'Reading test v2 done.\n\n' +
+      fullOk + ' of ' + picked.length + ' links returned full article text.\n' +
+      redirects + ' were still Google News redirects.\n' +
+      'See the logs sheet for details.'
+    );
+  } catch (e) { /* editor run: no UI */ }
+}
+
+/* ============================================================
+* SUMMARY QUALITY TEST — Gemini, on real full-article text.
+* Reads the newest readable (direct) rows, fetches the full page,
+* sends to Gemini with the REAL summary prompt/spec, and logs the
+* generated bullets so you can judge density. Does NOT touch
+* approved_news. Uses up to 3 Gemini calls (quota-aware).
+* ============================================================ */
+
+function testSummaryQualityGemini() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(APP.SHEETS.RESULTS);
+  var C = APP.COL.RESULTS;
+  var last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
+  if (last < 2) { log_('testSummary', 'No rows in search_results.'); return; }
+
+  var SAMPLE = 3;
+  var startRow = Math.max(2, last - 40);
+  var height = last - startRow + 1;
+  var data = sheet.getRange(startRow, 1, height, APP.HEADERS.RESULTS.length).getValues();
+
+  // Pick newest rows whose link is a real (non-Google-News) URL.
+  var picked = [];
+  for (var i = data.length - 1; i >= 0 && picked.length < SAMPLE; i--) {
+    var link = String(data[i][C.LINK - 1] || '').trim();
+    if (link && link.indexOf('news.google.com') < 0) {
+      picked.push({
+        row: startRow + i, link: link,
+        source: String(data[i][C.SOURCE - 1] || ''),
+        title: String(data[i][C.TITLE - 1] || ''),
+        publishedAt: String(data[i][C.PUBLISHED_AT - 1] || ''),
+        country: String(data[i][C.AI_COUNTRY - 1] || ''),
+        category: String(data[i][C.AI_CATEGORY - 1] || '')
+      });
+    }
+  }
+  if (!picked.length) { log_('testSummary', 'No readable (direct) rows found in the recent range.'); return; }
+
+  log_('testSummary', 'TEST START: summarizing ' + picked.length + ' articles with Gemini');
+
+  picked.forEach(function (p) {
+    var pageText = fetchArticleText_(p.link);
+    if (!pageText) {
+      log_('testSummary', 'Row ' + p.row + ' SKIPPED (page not readable): ' + truncate_(p.title, 50));
+      return;
+    }
+    // Build a row-shaped object so we can reuse the real prompt builder.
+    var A = APP.COL.APPROVED;
+    var fakeRow = [];
+    fakeRow[A.SOURCE - 1] = p.source;
+    fakeRow[A.TITLE - 1] = p.title;
+    fakeRow[A.LINK - 1] = p.link;
+    fakeRow[A.PUBLISHED_AT - 1] = p.publishedAt;
+    fakeRow[A.COUNTRY - 1] = p.country;
+    fakeRow[A.CATEGORY - 1] = p.category;
+    fakeRow[A.DESCRIPTION - 1] = '';
+    fakeRow[A.CONTENT - 1] = '';
+
+    try {
+      var out = callGeminiJson_(
+        getSummarySystemPrompt_(),
+        buildSummaryUserPrompt_(fakeRow, pageText),
+        SUMMARY_SCHEMA_
+      );
+      var bullets = Array.isArray(out.bullets) ? out.bullets : [];
+      log_('testSummary', 'Row ' + p.row + ' | ' + pageText.length + ' chars in | ' +
+        bullets.length + ' bullets out | ' + truncate_(p.title, 50));
+      log_('testSummary', '  HEADLINE: ' + truncate_(String(out.headline_line || ''), 300));
+      bullets.forEach(function (b, idx) {
+        log_('testSummary', '  • [' + (idx + 1) + '] ' + truncate_(String(b), 400));
+      });
+    } catch (err) {
+      log_('testSummary', 'Row ' + p.row + ' ERROR: ' + truncate_(getErrorMessage_(err), 200));
+    }
+    Utilities.sleep(6500);
+  });
+
+  log_('testSummary', 'TEST DONE. Review the bullets above in the logs sheet.');
+  try {
+    SpreadsheetApp.getUi().alert('Summary quality test done.\n\nOpen the logs sheet and read the testSummary lines to judge the bullets.');
+  } catch (e) {}
+}
+
+/* ============================================================
+* GNEWS DIAGNOSTIC — shows exactly what GNews returns per term.
+* Logs the called URL (key masked), HTTP code, and raw body head.
+* Run from the editor. No AI. Uses a few GNews requests.
+* ============================================================ */
+
+function diagnoseGNews() {
+  var termsToTest = ['free zone'];   // ONE term only, to isolate the hang
+  var apiKey = getSetting_('gnews_api_key');
+  log_('gnewsDiag', 'TEST START. Key present: ' + (apiKey ? 'YES (' + apiKey.length + ' chars)' : 'NO'));
+
+  termsToTest.forEach(function (term) {
+    var now = new Date();
+    var fromDate = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
+    var params = {
+      q: term, max: '10',
+      from: fromDate.toISOString(), to: now.toISOString(),
+      in: 'title,description,content', sortby: 'publishedAt', apikey: apiKey
+    };
+    var url = APP.URLS.GNEWS_SEARCH + '?' + toQueryString_(params);
+    var masked = url.replace(apiKey, 'KEY_HIDDEN');
+    log_('gnewsDiag', 'Calling: ' + truncate_(masked, 300));
+    var t0 = Date.now();
+    try {
+      var resp = UrlFetchApp.fetch(url, {
+        method: 'get',
+        muteHttpExceptions: true,
+        validateHttpsCertificates: true,
+        headers: { 'Accept': 'application/json', 'User-Agent': APP.USER_AGENT }
+      });
+      var ms = Date.now() - t0;
+      log_('gnewsDiag', 'Returned in ' + ms + ' ms, HTTP ' + resp.getResponseCode());
+      log_('gnewsDiag', 'BODY: ' + truncate_(resp.getContentText(), 350));
+    } catch (err) {
+      var ms2 = Date.now() - t0;
+      log_('gnewsDiag', 'EXCEPTION after ' + ms2 + ' ms: ' + getErrorMessage_(err));
+    }
+  });
+  log_('gnewsDiag', 'TEST DONE.');
+  try { SpreadsheetApp.getUi().alert('GNews diagnostic done. Open the logs (Step = gnewsDiag).'); } catch (e) {}
 }
