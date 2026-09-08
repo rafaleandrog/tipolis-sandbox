@@ -9,10 +9,16 @@ function onOpen() {
     .addItem('Create / repair project sheets', 'createProjectSheets')
     .addSeparator()
     .addItem('Run daily search now', 'runSearchNow')
-    .addItem('Run AI filter now', 'runAIFilterNow')
+    .addItem('Run backfill search (custom days, no AI)', 'runBackfillSearchNow')
+    .addItem('Run AI classification now', 'runAIFilterNow')
+    .addItem('Fix historical relevance/category mismatches (one-off)', 'fixHistoricalRelevanceMismatchesNow')
+    .addItem('Approve checked results (build summaries)', 'approveCheckedResultsNow')
     .addSeparator()
     .addItem('Generate weekly report now', 'generateReportNow')
     .addItem('Archive & reset week', 'archiveWeekNow')
+    .addSeparator()
+    .addItem('Pause daily automation', 'pauseDailyAutomation')
+    .addItem('Resume daily automation', 'resumeDailyAutomation')
     .addSeparator()
     .addItem('Install all triggers', 'installAllTriggers')
     .addItem('Delete all triggers', 'deleteAllProjectTriggers')
@@ -34,7 +40,6 @@ function createProjectSheets() {
   ensureSheet_(ss, APP.SHEETS.HISTORY, APP.HEADERS.HISTORY);
   ensureSheet_(ss, APP.SHEETS.SETTINGS, APP.HEADERS.SETTINGS);
   ensureSheet_(ss, APP.SHEETS.LOGS, APP.HEADERS.LOGS);
-  ensureSheet_(ss, APP.SHEETS.FEEDBACK, APP.HEADERS.FEEDBACK);
 
   formatTermsSheet_(ss.getSheetByName(APP.SHEETS.TERMS));
   formatResultsSheet_(ss.getSheetByName(APP.SHEETS.RESULTS));

@@ -89,25 +89,47 @@ function injectSection_(body, placeholder, items) {
   let index = body.getChildIndex(placeholderPara.asParagraph());
 
   if (!items.length) {
-    const p = body.insertParagraph(index, 'No significant news this week.');
-    p.setAttributes({}); // inherit default
-    placeholderPara.removeFromParent();
-    return;
-  }
+  const p = body.insertParagraph(index, 'No significant news this week.');
+  p.setAttributes({}); // inherit default
+  removePlaceholderParagraph_(body, placeholderPara);
+  return;
+}
 
-  items.forEach(item => {
-    const headItem = body.insertListItem(index++, '');
-    headItem.setGlyphType(DocumentApp.GlyphType.BULLET).setNestingLevel(0);
-    applyMarkdownToListItem_(headItem, item.headline);
+  // Hanging indent (like the good W23 report): the bullet marker sits at firstLine,
+// and the text wraps aligned at "start". HEAD ~0.63cm, BULLET ~1.25cm.
+const HEAD_START = 18;    // 0.63 cm — where headline text aligns
+const HEAD_FIRST = 0;     // marker position for headline
+const BULLET_START = 35;  // 1.25 cm — where bullet text aligns
+const BULLET_FIRST = 18;  // marker position for sub-bullets
 
-    item.bullets.forEach(b => {
-      const li = body.insertListItem(index++, '');
-      li.setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET).setNestingLevel(1);
-      applyMarkdownToListItem_(li, b);
-    });
-  });
+items.forEach(item => {
+  const headItem = body.insertListItem(index++, '');
+  headItem.setGlyphType(DocumentApp.GlyphType.BULLET).setNestingLevel(0);
+  headItem.setIndentStart(HEAD_START).setIndentFirstLine(HEAD_FIRST);
+  headItem.setLineSpacing(1.15).setSpacingBefore(0).setSpacingAfter(4);
+  applyMarkdownToListItem_(headItem, item.headline);
 
+  item.bullets.forEach(b => {
+  const li = body.insertListItem(index++, '');
+  li.setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET).setNestingLevel(1);
+  li.setIndentStart(BULLET_START).setIndentFirstLine(BULLET_FIRST);
+  li.setLineSpacing(1.15).setSpacingBefore(0).setSpacingAfter(2);
+  applyMarkdownToListItem_(li, b);
+});
+});
+
+removePlaceholderParagraph_(body, placeholderPara);
+}
+
+// Removes the placeholder paragraph. If it's the last paragraph in the document
+// (which Docs forbids removing), clears its text instead so {{...}} doesn't show.
+function removePlaceholderParagraph_(body, placeholderPara) {
+try {
   placeholderPara.removeFromParent();
+} catch (e) {
+  // Last paragraph of the section can't be removed; blank it out instead.
+  placeholderPara.asParagraph().clear();
+}
 }
 
 /* ---------- Inline markdown -> Doc formatting ---------- */
@@ -118,14 +140,14 @@ function applyMarkdownToListItem_(listItem, markdownText) {
   t.setText('');
   let pos = 0;
   segments.forEach(seg => {
-    if (!seg.text) return;
-    t.appendText(seg.text);
-    const end = pos + seg.text.length - 1;
-    if (seg.bold) t.setBold(pos, end, true);
-    if (seg.italic) t.setItalic(pos, end, true);
-    if (seg.url) t.setLinkUrl(pos, end, seg.url);
-    pos = end + 1;
-  });
+  if (!seg.text) return;
+  t.appendText(seg.text);
+  const end = pos + seg.text.length - 1;
+  t.setBold(pos, end, seg.bold === true);
+  t.setItalic(pos, end, seg.italic === true);
+  if (seg.url) t.setLinkUrl(pos, end, seg.url);
+  pos = end + 1;
+});
 }
 
 /**

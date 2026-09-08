@@ -109,10 +109,12 @@ Próspera, Destiny, ZEDE, SSZ, Gelephu Mindfulness City, TechParkCV, Sherbro Isl
 
 ### Rules
 
+- **`category` is the ONLY field that decides whether an article is kept or dropped.** It is what `api_listTriage_` gates the triage screen on and what `readApprovedItems_`/`injectSection_` use to place an item in the report. `relevance` never gates anything — see below.
 - **tipolis** — the article ties a priority country OR a tracked project to a relevant topic (SEZ, free zone, private city, charter city, governance, investment, infrastructure, citizenship, regulatory reform).
 - **industry** — the article concerns SEZs, free zones, private/charter cities, network states, regulatory sandboxes, governance innovation, industrial corridors, technology hubs, in a country NOT on the priority list.
-- **reject** — mentions a priority country but for an unrelated topic (sports, weather, entertainment, generic crime); or is promotional/opinion-only/fact-free; or is a duplicate of an item already approved this week or already in `approved_history`.
+- **reject** — mentions a priority country but for an unrelated topic (sports, weather, entertainment, generic crime); or is promotional/opinion-only/fact-free; or is a duplicate of an item already approved this week or already in `approved_history` (near-duplicate titles within the same week are also caught locally before the Gemini call — see `normalizeTitleForDedup_` in `04_AIFilter.gs`).
 - Ties go to **tipolis** when there is any clear link to a priority country, project, stakeholder, or strategic theme.
+- `relevance` is **never** `"reject"` and must never contradict `category`: it is only a priority/ordering signal (`high`/`medium`/`low`) for articles whose `category` is `tipolis` or `industry`. When `category` is `reject`, `relevance` is `low` (still required by the schema, but without effect). This was previously a second, independent enum that included `"reject"`; in practice the model set it inconsistently with `category` on roughly 1 in 5 articles, silently hiding relevant news from triage. The schema and prompt now forbid `relevance:"reject"` outright, and the classifier also applies a defensive server-side coercion as a second line of defense.
 
 ### Country and region extraction (required for every item)
 
@@ -129,19 +131,21 @@ Special Economic Zone (SEZ), Special Sustainability Zone (SSZ), Free Economic Zo
 
 ## 10. AI Filter — JSON Output Contract
 
-Input per article: source, title, description, URL, search term, plus the priority-country and tracked-project lists.
+Input per article: source, title, description, URL, search term, plus the priority-country and tracked-project lists. In practice, articles are sent to Gemini in batches of 10 (see `buildFilterBatchUserPrompt_`/`FILTER_BATCH_SCHEMA_` in `04_AIFilter.gs`), each carrying a numeric `id`; the shape per article is the same as below, wrapped in `{"results": [...]}`.
 
 Output (JSON only):
 
 ```json
 {
-  "relevance": "high | medium | low | reject",
+  "relevance": "high | medium | low",
   "category": "tipolis | industry | reject",
   "country": "<canonical name | Multiple | Global>",
   "region": "<one of the 11 regions>",
   "reason": "<one short sentence>"
 }
 ```
+
+`relevance` can never be `"reject"` — only `category` rejects (see §8 Rules above). When `category` is `"reject"`, `relevance` is still required by the schema and is set to `"low"`.
 
 ---
 

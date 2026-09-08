@@ -39,10 +39,15 @@ function callGeminiJson_(systemPrompt, userPrompt, responseSchema) {
       });
       const code = resp.getResponseCode();
       const text = resp.getContentText();
-      if (code === 429 || code >= 500) {
+      if (code === 503 || code >= 500) {
+        // Server overloaded/temporary: back off progressively and retry.
         lastErr = new Error(`Gemini HTTP ${code}: ${truncate_(text, 300)}`);
-        Utilities.sleep(2000);
+        Utilities.sleep(2000 * (attempt + 1));   // 2s, 4s, 6s, 8s
         continue;
+      }
+      if (code === 429) {
+        // Quota exhausted: retrying won't help today. Fail fast.
+        throw new Error(`Gemini HTTP 429: ${truncate_(text, 300)}`);
       }
       if (code < 200 || code >= 300) {
         throw new Error(`Gemini HTTP ${code}: ${truncate_(text, 400)}`);
