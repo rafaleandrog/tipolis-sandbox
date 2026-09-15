@@ -36,6 +36,7 @@ function handleRequest_(e, method) {
       case 'GET /triage':           return jsonOut_({ ok: true, data: api_listTriage_(e.parameter) });
       case 'POST /triage/approve':  return jsonOut_({ ok: true, data: api_approve_(body) });
       case 'POST /triage/reject':   return jsonOut_({ ok: true, data: api_reject_(body) });
+      case 'POST /manual/add':      return jsonOut_({ ok: true, data: api_manualAdd_(body) });
 
       case 'GET /summary':          return jsonOut_({ ok: true, data: api_listSummary_() });
       case 'POST /summary/save':    return jsonOut_({ ok: true, data: api_saveSummary_(body) });
@@ -216,6 +217,81 @@ function api_reject_(body) {
   const sheet = sheet_(APP.SHEETS.RESULTS);
   sheet.getRange(Number(body.row), APP.COL.RESULTS.AI_RELEVANCE).setValue('reject');
   return { rejected: Number(body.row) };
+}
+
+// Editor-pasted URL from the Triage toolbar (spec §3). Fetches the page,
+// classifies it with the same Gemini prompt as the weekly filter, and
+// writes it straight into search_results with FilterStatus="Done" so it
+// shows up in Pending exactly like an automated hit — no separate code
+// path downstream (approve/reject, summary, report all key off the sheet
+// row, not where it came from).
+function api_manualAdd_(body) {
+  const url = normalizeUrl_(body && body.url);
+  if (!url) throw new Error('URL is required.');
+
+  const resultsSheet = sheet_(APP.SHEETS.RESULTS);
+  if (getKnownUrls_(resultsSheet).has(url)) {
+    throw new Error('This URL is already in search_results or approved_history.');
+  }
+
+  const term = String((body && body.term) || '').trim() || 'Manual';
+  const item = fetchManualArticleItem_(url);   // throws 'Could not fetch URL ...' on failure
+  const fetchedAt = formatDateTime_(new Date());
+
+  const rowNumber = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
+  resultsSheet.getRange(rowNumber, 1, 1, APP.HEADERS.RESULTS.length)
+    .setValues([buildResultRow_(term, item, fetchedAt)]);
+  resultsSheet.getRange(rowNumber, 1, 1, 1).insertCheckboxes();
+
+  const classification = classifyManualArticle_(item, term);
+  const C = APP.COL.RESULTS;
+  resultsSheet.getRange(rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
+    classification.relevance, classification.category,
+    classification.country, classification.region, classification.reason, ''
+  ]]);
+  resultsSheet.getRange(rowNumber, C.FILTER_STATUS).setValue('Done');
+  SpreadsheetApp.flush();
+
+  log_('manualAdd', `Added "${item.title}" (${url}) as row ${rowNumber}.`);
+  return {
+    row: rowNumber, title: item.title, source: item.source,
+    category: classification.category, relevance: classification.relevance
+  };
+}
+
+// Classifies a single manually-added article with the weekly filter's own
+// prompt/schema. An editor who pasted this URL by hand has already vetted
+// it, so unlike the batch filter this never files it as "reject" — on a
+// Gemini failure it falls back to a neutral classification (with the error
+// recorded as the AI reason) rather than blocking the add.
+function classifyManualArticle_(item, term) {
+  const systemPrompt = buildFilterSystemPrompt_(getTipolisCountriesText_());
+  const userPrompt = [
+    `Source: ${item.source}`,
+    `Title: ${item.title}`,
+    `Description: ${truncate_(item.description, 1500)}`,
+    `URL: ${item.link}`,
+    `Search term: ${term}`
+  ].join('\n');
+
+  let out;
+  try {
+    out = callGeminiJson_(systemPrompt, userPrompt, FILTER_SCHEMA_);
+  } catch (err) {
+    return {
+      relevance: 'medium', category: 'industry', country: '', region: '',
+      reason: 'Manual add — AI classification failed: ' + getErrorMessage_(err)
+    };
+  }
+  let category = String(out.category || 'industry');
+  let relevance = String(out.relevance || 'medium');
+  if (category === 'reject') category = 'industry';
+  if (relevance === 'reject') relevance = 'medium';
+  return {
+    relevance: relevance, category: category,
+    country: String(out.country || ''), region: String(out.region || ''),
+    reason: String(out.reason || '')
+  };
 }
 
 /* ---------- Summary ---------- */
