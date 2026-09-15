@@ -41,6 +41,16 @@
         <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh</button>
       </div>
 
+      <form class="pm-manual-add" data-manual-form>
+        <span class="pm-manual-add__label">Add a link manually</span>
+        <input class="t-input pm-manual-add__field" type="url" data-manual-url
+          placeholder="Paste the article URL" required>
+        <input class="t-input pm-manual-add__field pm-manual-add__field--term" type="text" data-manual-term
+          placeholder="Term/tag (optional)">
+        <button class="pm-btn pm-btn--primary" type="submit" data-manual-submit>Add</button>
+        <div class="pm-manual-add__error" data-manual-error hidden></div>
+      </form>
+
       <div class="pm-triage-counter" data-counter>
         <span><strong data-count-pending>0</strong> pending</span>
         <span><strong data-count-approved>0</strong> approved this session</span>
@@ -213,6 +223,62 @@
       });
 
       document.querySelector('[data-action="refresh"]').addEventListener('click', load);
+
+      // --- Manual link add (spec §3 /manual/add) ---------------------------
+      const manualForm = document.querySelector('[data-manual-form]');
+      const manualUrlInput = document.querySelector('[data-manual-url]');
+      const manualTermInput = document.querySelector('[data-manual-term]');
+      const manualSubmitBtn = document.querySelector('[data-manual-submit]');
+      const manualErrorEl = document.querySelector('[data-manual-error]');
+
+      function friendlyManualError(msg) {
+        if (/URL is required/i.test(msg)) return 'Informe uma URL.';
+        if (/already in search_results|already in approved_history/i.test(msg)) return 'Essa notícia já está na lista.';
+        if (/Could not fetch URL/i.test(msg)) return 'Não consegui abrir esse link, confira se está correto.';
+        return msg || 'Não foi possível adicionar o link.';
+      }
+
+      manualForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        manualErrorEl.hidden = true;
+        manualErrorEl.textContent = '';
+
+        const url = manualUrlInput.value.trim();
+        if (!url) {
+          manualErrorEl.textContent = 'Informe uma URL.';
+          manualErrorEl.hidden = false;
+          manualUrlInput.focus();
+          return;
+        }
+
+        manualSubmitBtn.disabled = true;
+        manualUrlInput.disabled = true;
+        manualTermInput.disabled = true;
+        manualSubmitBtn.textContent = 'Adicionando…';
+
+        try {
+          const term = manualTermInput.value.trim();
+          const data = await PM.apiPost('/manual/add', term ? { url, term } : { url });
+          manualUrlInput.value = '';
+          manualTermInput.value = '';
+          const bits = [];
+          if (data.source) bits.push(data.source);
+          if (data.category) bits.push(data.category);
+          if (data.relevance) bits.push('relevance: ' + data.relevance);
+          PM.toast('Adicionado: "' + (data.title || url) + '"' + (bits.length ? ' (' + bits.join(', ') + ')' : ''), 'success');
+          await load();
+        } catch (err) {
+          if (err.name !== 'Unauthorized') {
+            manualErrorEl.textContent = friendlyManualError(err.message);
+            manualErrorEl.hidden = false;
+          }
+        } finally {
+          manualSubmitBtn.disabled = false;
+          manualUrlInput.disabled = false;
+          manualTermInput.disabled = false;
+          manualSubmitBtn.textContent = 'Add';
+        }
+      });
 
       load();
     })();
