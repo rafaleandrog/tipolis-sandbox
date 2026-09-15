@@ -71,6 +71,10 @@ commands.
 
 1. **Triage** — `triage.html`. Approve the items that go into the report.
    Each approval auto-triggers the AI bullet summary in the background.
+   Found a relevant article the automated search missed? Paste its URL into
+   the "Add a link manually" field at the top of the queue — the backend
+   fetches the page, classifies it with Gemini, and drops it into the same
+   pending list to be approved/rejected like any other item.
 2. **Summary** — `summary.html`. Walk through the approved items one by one.
    Trim each set of bullets to 3–5. Save & next persists per item.
 3. **Report** — `report.html`. Drag-to-reorder inside the two sections,
@@ -80,7 +84,6 @@ commands.
 
 ## What is NOT in this version
 
-- No fully-manual article entry (deferred).
 - No localStorage anywhere. The bearer token sits in `sessionStorage` only
   for the session (cleared on Logout or tab close); every other secret stays
   server-side in the `report_settings` sheet.
