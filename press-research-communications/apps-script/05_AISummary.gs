@@ -65,7 +65,20 @@ function generateSummaryForApprovedRow_(rowNumber) {
   const row = approved.getRange(rowNumber, 1, 1, APP.HEADERS.APPROVED.length).getValues()[0];
 
   try {
-    const pageText = fetchArticleText_(String(row[A.LINK - 1] || ''));   // read the real page
+    // Full resolution (including the slower batchexecute network path) only
+    // happens here, for the small set of approved items — not during bulk
+    // search — so a Google News redirect link doesn't block a full-text
+    // summary just because it wasn't resolved cheaply at search time.
+    let articleUrl = String(row[A.LINK - 1] || '');
+    if (articleUrl.indexOf('news.google.com') >= 0) {
+      const resolved = resolveArticleUrl_(articleUrl, /*allowNetwork*/ true);
+      if (resolved) {
+        articleUrl = resolved;
+        approved.getRange(rowNumber, A.LINK).setValue(resolved);
+      }
+    }
+
+    const pageText = fetchArticleText_(articleUrl);
     const out = callGeminiJson_(
       getSummarySystemPrompt_(),
       buildSummaryUserPrompt_(row, pageText),

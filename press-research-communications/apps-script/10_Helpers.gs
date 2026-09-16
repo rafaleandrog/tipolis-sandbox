@@ -281,7 +281,7 @@ function testArticleReading() {
   var fullOk = 0, thin = 0;
   picked.forEach(function (p) {
     var isGN = p.link.indexOf('news.google.com') >= 0;
-    var resolved = resolveArticleUrl_(p.link);
+    var resolved = resolveArticleUrl_(p.link, /*allowNetwork*/ true);
     var fetchUrl = resolved || p.link;
     var chars = countArticleChars_(fetchUrl);
     var label = isGN ? (resolved ? 'GN->resolved' : 'GN->UNRESOLVED') : 'direct';
@@ -325,8 +325,16 @@ function countArticleChars_(url) {
   }
 }
 
-// Returns the real publisher URL, or null if it can't be resolved.
-function resolveArticleUrl_(url) {
+/**
+ * Resolves a Google News redirect link to the real publisher URL.
+ * allowNetwork=false (used during bulk search): only the cheap, local
+ * base64 decode is tried — no HTTP calls, so it can't blow the search
+ * step's execution-time budget. allowNetwork=true (used when approving/
+ * summarizing one article): also tries the slower batchexecute network
+ * path for "new-format" links the cheap decode can't handle.
+ * Returns null if it can't resolve (caller should keep the original link).
+ */
+function resolveArticleUrl_(url, allowNetwork) {
   if (!url) return null;
   if (url.indexOf('news.google.com') < 0) return url;   // already a direct URL (e.g. from GNews)
   var m = url.match(/\/(?:rss\/)?articles\/([^?\/]+)/) || url.match(/\/read\/([^?\/]+)/);
@@ -334,6 +342,7 @@ function resolveArticleUrl_(url) {
   var articleId = m[1];
   var decoded = decodeGoogleNewsBase64_(articleId);   // cheap path (old-format links)
   if (decoded) return decoded;
+  if (!allowNetwork) return null;
   return resolveViaBatchExecute_(articleId);           // fragile path (new-format links)
 }
 

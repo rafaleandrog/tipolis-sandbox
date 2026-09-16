@@ -36,7 +36,6 @@ function handleRequest_(e, method) {
       case 'GET /triage':           return jsonOut_({ ok: true, data: api_listTriage_(e.parameter) });
       case 'POST /triage/approve':  return jsonOut_({ ok: true, data: api_approve_(body) });
       case 'POST /triage/reject':   return jsonOut_({ ok: true, data: api_reject_(body) });
-      case 'POST /manual/add':      return jsonOut_({ ok: true, data: api_manualAdd_(body) });
 
       case 'GET /summary':          return jsonOut_({ ok: true, data: api_listSummary_() });
       case 'POST /summary/save':    return jsonOut_({ ok: true, data: api_saveSummary_(body) });
@@ -54,6 +53,11 @@ function handleRequest_(e, method) {
       case 'POST /feedback':        return jsonOut_({ ok: true, data: api_submitFeedback_(body) });
 
       case 'POST /summary/build':   return jsonOut_({ ok: true, data: api_buildPendingSummaries_(body) });
+
+      // Manual link ingestion — paste a URL you found by hand and it gets
+      // scraped + inserted into search_results with every column filled,
+      // then classified immediately so it shows up in /triage.
+      case 'POST /manual/add':      return jsonOut_({ ok: true, data: api_addManualLink_(body) });
 
       default: return jsonOut_({ ok: false, error: 'Unknown route: ' + route });
     }
@@ -215,82 +219,118 @@ function api_approve_(body) {
 
 function api_reject_(body) {
   const sheet = sheet_(APP.SHEETS.RESULTS);
-  sheet.getRange(Number(body.row), APP.COL.RESULTS.AI_RELEVANCE).setValue('reject');
-  return { rejected: Number(body.row) };
+  const row = Number(body.row);
+  // category is what api_listTriage_ actually gates on (see 04_AIFilter.gs
+  // comments) — setting only ai_relevance never removed the item from the
+  // queue, so a rejected article kept coming back on every refresh.
+  sheet.getRange(row, APP.COL.RESULTS.AI_CATEGORY).setValue('reject');
+  sheet.getRange(row, APP.COL.RESULTS.AI_RELEVANCE).setValue('reject');
+  return { rejected: row };
 }
 
-// Editor-pasted URL from the Triage toolbar (spec §3). Fetches the page,
-// classifies it with the same Gemini prompt as the weekly filter, and
-// writes it straight into search_results with FilterStatus="Done" so it
-// shows up in Pending exactly like an automated hit — no separate code
-// path downstream (approve/reject, summary, report all key off the sheet
-// row, not where it came from).
-function api_manualAdd_(body) {
-  const url = normalizeUrl_(body && body.url);
+/**
+ * Manual link ingestion. Body: { url: string, term?: string }
+ * Scrapes Open Graph / meta tags from the page, fills every search_results column
+ * the same way the automated search does, inserts the row, then runs a
+ * single (cheap, 1-article) Gemini classification so it's immediately
+ * visible in /triage with relevance/category/country/region set.
+ * A manually-added link is never auto-rejected by the AI or by any other
+ * automated step — you chose to add it, so it always reaches your triage
+ * screen for you to decide, even if Gemini fails or returns "reject".
+ */
+function api_addManualLink_(body) {
+  const url = normalizeUrl_(String(body.url || '').trim());
   if (!url) throw new Error('URL is required.');
 
-  const resultsSheet = sheet_(APP.SHEETS.RESULTS);
-  if (getKnownUrls_(resultsSheet).has(url)) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const resultsSheet = ss.getSheetByName(APP.SHEETS.RESULTS);
+  const knownUrls = getKnownUrls_(resultsSheet);
+  if (knownUrls.has(url)) {
     throw new Error('This URL is already in search_results or approved_history.');
   }
 
-  const term = String((body && body.term) || '').trim() || 'Manual';
-  const item = fetchManualArticleItem_(url);   // throws 'Could not fetch URL ...' on failure
+  const meta = fetchArticleMetadata_(url);
+  const term = String(body.term || '').trim() || 'Manual';
   const fetchedAt = formatDateTime_(new Date());
 
-  const rowNumber = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
-  resultsSheet.getRange(rowNumber, 1, 1, APP.HEADERS.RESULTS.length)
-    .setValues([buildResultRow_(term, item, fetchedAt)]);
-  resultsSheet.getRange(rowNumber, 1, 1, 1).insertCheckboxes();
+  const row = buildResultRow_(term, {
+    publishedAt: meta.publishedAt || fetchedAt,
+    source: meta.source || meta.hostname,
+    title: meta.title || url,
+    link: url,
+    description: meta.description || '',
+    content: meta.content || ''
+  }, fetchedAt);
+  row[APP.COL.RESULTS.FILTER_STATUS - 1] = 'Pending';
 
-  const classification = classifyManualArticle_(item, term);
-  const C = APP.COL.RESULTS;
-  resultsSheet.getRange(rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
-    classification.relevance, classification.category,
-    classification.country, classification.region, classification.reason, ''
-  ]]);
-  resultsSheet.getRange(rowNumber, C.FILTER_STATUS).setValue('Done');
+  const startRow = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
+  resultsSheet.getRange(startRow, 1, 1, APP.HEADERS.RESULTS.length).setValues([row]);
+  resultsSheet.getRange(startRow, 1, 1, 1).insertCheckboxes();
   SpreadsheetApp.flush();
 
-  log_('manualAdd', `Added "${item.title}" (${url}) as row ${rowNumber}.`);
-  return {
-    row: rowNumber, title: item.title, source: item.source,
-    category: classification.category, relevance: classification.relevance
-  };
+  // A manual entry was already vetted by a human (you found it, you're
+  // adding it on purpose) — no AI or automated step is allowed to hide it
+  // from triage. The AI still runs, but only to fill country/region/
+  // relevance as helpful context; its "category" can never come back as
+  // "reject" for a manual row, and if the call fails entirely the row is
+  // still marked Done with safe defaults so it shows up immediately either
+  // way, instead of getting stuck as "Pending" (which would keep it out of
+  // /triage, since that view only lists FilterStatus="Done" rows).
+  let relevance = 'medium', category = 'industry', country = '', region = '',
+      reason = 'Manual entry — added by you, always shown regardless of AI classification.';
+  try {
+    const systemPrompt = buildFilterSystemPrompt_(getTipolisCountriesText_());
+    const out = callGeminiJson_(systemPrompt, buildFilterUserPrompt_(row), FILTER_SCHEMA_);
+    relevance = String(out.relevance || 'medium');
+    category = String(out.category || 'industry');
+    if (category === 'reject') category = 'industry';   // manual entries are never auto-rejected
+    if (relevance === 'reject') relevance = 'medium';
+    country = String(out.country || '');
+    region = String(out.region || '');
+    reason = String(out.reason || reason) + ' (manual entry — never auto-rejected)';
+  } catch (err) {
+    log_('addManualLink', `Classification failed, using safe defaults so the row still shows in triage: ${getErrorMessage_(err)}`);
+  }
+  resultsSheet.getRange(startRow, APP.COL.RESULTS.AI_RELEVANCE, 1, 5).setValues([[
+    relevance, category, country, region, reason
+  ]]);
+  resultsSheet.getRange(startRow, APP.COL.RESULTS.FILTER_STATUS).setValue('Done');
+
+  log_('addManualLink', `Manual link added at row ${startRow}: ${truncate_(url, 100)}`);
+  return { row: startRow, title: meta.title, source: meta.source, category: category, relevance: relevance };
 }
 
-// Classifies a single manually-added article with the weekly filter's own
-// prompt/schema. An editor who pasted this URL by hand has already vetted
-// it, so unlike the batch filter this never files it as "reject" — on a
-// Gemini failure it falls back to a neutral classification (with the error
-// recorded as the AI reason) rather than blocking the add.
-function classifyManualArticle_(item, term) {
-  const systemPrompt = buildFilterSystemPrompt_(getTipolisCountriesText_());
-  const userPrompt = [
-    `Source: ${item.source}`,
-    `Title: ${item.title}`,
-    `Description: ${truncate_(item.description, 1500)}`,
-    `URL: ${item.link}`,
-    `Search term: ${term}`
-  ].join('\n');
+// Scrapes title/description/source/publishedAt from a bare URL using
+// og:* and standard meta tags, falling back gracefully when absent.
+function fetchArticleMetadata_(url) {
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'get', muteHttpExceptions: true, followRedirects: true,
+    headers: { 'User-Agent': APP.USER_AGENT, 'Accept': 'text/html,application/xhtml+xml,*/*' }
+  });
+  const code = resp.getResponseCode();
+  if (code < 200 || code >= 300) throw new Error(`Could not fetch URL (HTTP ${code}).`);
+  const html = resp.getContentText();
+  const hostname = url.match(/^https?:\/\/([^\/]+)/) ? RegExp.$1.replace(/^www\./, '') : '';
 
-  let out;
-  try {
-    out = callGeminiJson_(systemPrompt, userPrompt, FILTER_SCHEMA_);
-  } catch (err) {
-    return {
-      relevance: 'medium', category: 'industry', country: '', region: '',
-      reason: 'Manual add — AI classification failed: ' + getErrorMessage_(err)
-    };
-  }
-  let category = String(out.category || 'industry');
-  let relevance = String(out.relevance || 'medium');
-  if (category === 'reject') category = 'industry';
-  if (relevance === 'reject') relevance = 'medium';
+  const meta = (prop) => {
+    const m = html.match(new RegExp(
+      `<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`, 'i'
+    )) || html.match(new RegExp(
+      `<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'
+    ));
+    return m ? decodeHtml_(m[1]) : '';
+  };
+  const titleTagMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+
   return {
-    relevance: relevance, category: category,
-    country: String(out.country || ''), region: String(out.region || ''),
-    reason: String(out.reason || '')
+    title: meta('og:title') || (titleTagMatch ? decodeHtml_(titleTagMatch[1]) : ''),
+    description: meta('og:description') || meta('description'),
+    source: meta('og:site_name') || hostname,
+    hostname: hostname,
+    publishedAt: formatDateTimeFromValue_(
+      meta('article:published_time') || meta('og:updated_time') || ''
+    ),
+    content: fetchArticleText_(url)
   };
 }
 
