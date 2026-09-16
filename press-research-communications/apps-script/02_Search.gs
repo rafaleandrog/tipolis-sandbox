@@ -284,6 +284,55 @@ function fetchFromGNewsApi_(rule) {
   }
 }
 
+// Fetches a single editor-pasted URL (Triage "Add a link manually") and
+// shapes it exactly like the items fetchNewsForRule_ returns, so it can go
+// straight through buildResultRow_ like an automated search hit. Throws a
+// "Could not fetch URL ..." error on any failure — the caller (api_manualAdd_)
+// lets that propagate as the request's error response.
+function fetchManualArticleItem_(url) {
+  let resp;
+  try {
+    resp = UrlFetchApp.fetch(url, {
+      method: 'get', muteHttpExceptions: true, followRedirects: true,
+      headers: { 'User-Agent': APP.USER_AGENT, 'Accept': 'text/html,application/xhtml+xml,*/*' }
+    });
+  } catch (err) {
+    throw new Error('Could not fetch URL: ' + getErrorMessage_(err));
+  }
+  const code = resp.getResponseCode();
+  if (code < 200 || code >= 300) throw new Error(`Could not fetch URL (HTTP ${code}).`);
+  const html = resp.getContentText();
+  if (!html) throw new Error('Could not fetch URL (empty response).');
+
+  const titleMatch =
+    html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i) ||
+    html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const title = titleMatch ? cleanText_(titleMatch[1]) : '';
+  if (!title) throw new Error('Could not fetch URL (no page title found).');
+
+  const descMatch =
+    html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i) ||
+    html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i);
+  const description = descMatch ? cleanText_(descMatch[1]) : '';
+
+  const siteMatch = html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']*)["']/i);
+  const domainMatch = url.match(/^https?:\/\/(?:www\.)?([^\/]+)/i);
+  const source = siteMatch ? cleanText_(siteMatch[1]) : (domainMatch ? domainMatch[1] : url);
+
+  let body = html.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ');
+  const articleMatch = body.match(/<article[\s\S]*?<\/article>/i);
+  if (articleMatch) body = articleMatch[0];
+  const content = truncate_(cleanText_(body), APP.LIMITS.MAX_CONTENT_CHARS);
+
+  return {
+    publishedAt: '', source: source, title: title, link: url,
+    description: description || truncate_(content, 400), content: content
+  };
+}
+
 function enforceRequestSpacing_() {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
