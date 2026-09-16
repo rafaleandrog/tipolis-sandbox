@@ -7,6 +7,14 @@
  * deduped before the max_results cut. Appends new rows to
  * search_results. Dedups by URL against search_results (current
  * accumulator) and approved_history.
+ *
+ * Rows are written to the sheet PER TERM, right after that term is
+ * fetched — not accumulated in memory and written once at the end.
+ * Apps Script kills a run that exceeds its execution time limit
+ * (~6 min on a personal account), and with 45+ active terms a daily
+ * run can hit that. Writing incrementally means a mid-run kill only
+ * costs the terms not yet reached (picked up on the next daily run);
+ * it no longer loses everything already fetched that day.
  **************************************************************/
 
 function runSearchNow() {
@@ -36,23 +44,34 @@ function runSearchCore_(mode) {
     if (!rules.length) { log_('runSearchCore', 'No active terms.'); return; }
 
     const knownUrls = getKnownUrls_(resultsSheet);  // results + history
-    const rowsToAppend = [];
     const fetchedAt = formatDateTime_(new Date());
+    let totalWritten = 0;
 
     log_('runSearchCore', `Started (${mode}). Active terms: ${rules.length}.`);
 
     for (const rule of rules) {
       try {
         const items = fetchNewsForRule_(rule);
+        const rowsForTerm = [];
         let added = 0, dup = 0, invalid = 0;
         for (const item of items) {
           const link = normalizeUrl_(item.link);
           if (!link) { invalid++; continue; }
           if (knownUrls.has(link)) { dup++; continue; }
           if (!passesLocalMatchRule_(rule, item)) { invalid++; continue; }
-          rowsToAppend.push(buildResultRow_(rule.term, item, fetchedAt));
+          rowsForTerm.push(buildResultRow_(rule.term, item, fetchedAt));
           knownUrls.add(link);
           added++;
+        }
+        // Write this term's rows now, not at the end of the whole loop —
+        // see the file header comment for why.
+        if (rowsForTerm.length) {
+          const startRow = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
+          resultsSheet.getRange(startRow, 1, rowsForTerm.length, APP.HEADERS.RESULTS.length)
+            .setValues(rowsForTerm);
+          resultsSheet.getRange(startRow, 1, rowsForTerm.length, 1).insertCheckboxes();
+          SpreadsheetApp.flush();
+          totalWritten += rowsForTerm.length;
         }
         log_('runSearchCore',
           `Term "${rule.term}": ${items.length} fetched, ${added} new, ${dup} dup, ${invalid} filtered.`);
@@ -61,16 +80,9 @@ function runSearchCore_(mode) {
       }
     }
 
-    if (rowsToAppend.length) {
-      const startRow = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
-      resultsSheet.getRange(startRow, 1, rowsToAppend.length, APP.HEADERS.RESULTS.length)
-        .setValues(rowsToAppend);
-      resultsSheet.getRange(startRow, 1, rowsToAppend.length, 1).insertCheckboxes();
-      SpreadsheetApp.flush();
-      log_('runSearchCore', `${rowsToAppend.length} row(s) written from row ${startRow}.`);
-    } else {
-      log_('runSearchCore', 'No new rows.');
-    }
+    log_('runSearchCore', totalWritten
+      ? `${totalWritten} row(s) written across ${rules.length} term(s).`
+      : 'No new rows.');
   } finally {
     lock.releaseLock();
   }
@@ -113,14 +125,15 @@ function runBackfillSearchCore_(daysOverride) {
     const rules = baseRules.map(r => Object.assign({}, r, { days: daysOverride }));
 
     const knownUrls = getKnownUrls_(resultsSheet);  // dedup against results + history
-    const rowsToAppend = [];
     const fetchedAt = formatDateTime_(new Date());
+    let totalWritten = 0;
 
     log_('runBackfillSearch', `Started (backfill ${daysOverride}d). Active terms: ${rules.length}.`);
 
     for (const rule of rules) {
       try {
         const items = fetchNewsForRule_(rule);
+        const rowsForTerm = [];
         let added = 0, dup = 0, invalid = 0;
         for (const item of items) {
           const link = normalizeUrl_(item.link);
@@ -130,9 +143,19 @@ function runBackfillSearchCore_(daysOverride) {
           const row = buildResultRow_(rule.term, item, fetchedAt);
           // Mark Skipped so the AI filter and triage ignore these rows.
           row[APP.COL.RESULTS.FILTER_STATUS - 1] = 'Skipped';
-          rowsToAppend.push(row);
+          rowsForTerm.push(row);
           knownUrls.add(link);
           added++;
+        }
+        // Write this term's rows now, not at the end of the whole loop —
+        // same protection as runSearchCore_ (see file header comment).
+        if (rowsForTerm.length) {
+          const startRow = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
+          resultsSheet.getRange(startRow, 1, rowsForTerm.length, APP.HEADERS.RESULTS.length)
+            .setValues(rowsForTerm);
+          resultsSheet.getRange(startRow, 1, rowsForTerm.length, 1).insertCheckboxes();
+          SpreadsheetApp.flush();
+          totalWritten += rowsForTerm.length;
         }
         log_('runBackfillSearch',
           `Term "${rule.term}": ${items.length} fetched, ${added} new, ${dup} dup, ${invalid} filtered.`);
@@ -142,16 +165,12 @@ function runBackfillSearchCore_(daysOverride) {
     }
 
     const ui = SpreadsheetApp.getUi();
-    if (rowsToAppend.length) {
-      const startRow = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
-      resultsSheet.getRange(startRow, 1, rowsToAppend.length, APP.HEADERS.RESULTS.length)
-        .setValues(rowsToAppend);
-      resultsSheet.getRange(startRow, 1, rowsToAppend.length, 1).insertCheckboxes();
-      SpreadsheetApp.flush();
-      log_('runBackfillSearch', `${rowsToAppend.length} backfill row(s) written from row ${startRow}.`);
-      ui.alert(`Backfill complete.\n\n${rowsToAppend.length} new row(s) added to search_results (FilterStatus="Skipped").`);
+    log_('runBackfillSearch', totalWritten
+      ? `${totalWritten} backfill row(s) written across ${rules.length} term(s).`
+      : 'No new rows (all duplicates).');
+    if (totalWritten) {
+      ui.alert(`Backfill complete.\n\n${totalWritten} new row(s) added to search_results (FilterStatus="Skipped").`);
     } else {
-      log_('runBackfillSearch', 'No new rows (all duplicates).');
       ui.alert('Backfill done.\n\nNo new rows — all results were already in the sheet (URL deduplication).');
     }
   } finally {
