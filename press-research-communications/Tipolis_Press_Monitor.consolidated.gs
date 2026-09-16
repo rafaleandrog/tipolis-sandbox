@@ -17,6 +17,7 @@
  **************************************************************************/
 
 
+
 /* ========================================================================
  * SECTION: 00_Config.gs
  * ====================================================================== */
@@ -92,7 +93,7 @@ const APP = {
     case_sensitive: false,
     language: 'en',
     country: '',
-    max_results: 20,
+    max_results: 40,          // was 20 — raised so RSS-primary has room to work with
     gemini_model: 'gemini-2.5-flash',
     daily_search_hour: 6,    // daily search runs ~06:00
     weekly_filter_hour: 7    // weekly AI filter runs ~07:00 (margin after search)
@@ -158,6 +159,7 @@ const SETTINGS_SEED = [
   ['weekly_filter_auto_run', 'true', 'Toggle the weekly AI filter trigger'],
   ['frontend_bearer_token', '', 'Random 32+ char token the frontend must send — PASTE HERE']
 ];
+
 
 /* ========================================================================
  * SECTION: 01_Menu_Setup.gs
@@ -265,15 +267,20 @@ function formatApprovedSheet_(sheet) {
   sheet.getRange(2, 1, rows - 1, 1).insertCheckboxes();        // Approved
 }
 
+
 /* ========================================================================
  * SECTION: 02_Search.gs
  * ====================================================================== */
 
 /**************************************************************
  * TIPOLIS PRESS MONITOR — 02_Search.gs
- * Daily search. Google News RSS first, GNews API fallback.
- * Appends new rows to search_results. Dedups by URL against
- * search_results (current accumulator) and approved_history.
+ * Daily search. Google News RSS is the PRIMARY source (same engine
+ * as a manual news.google.com search — diverse countries/sources,
+ * not dominated by one prolific outlet); GNews API is a FALLBACK
+ * used only when RSS returns nothing. Near-duplicate titles are
+ * deduped before the max_results cut. Appends new rows to
+ * search_results. Dedups by URL against search_results (current
+ * accumulator) and approved_history.
  **************************************************************/
 
 function runSearchNow() {
@@ -450,14 +457,52 @@ function getActiveTermRules_(sheet) {
   return rules;
 }
 
-/* ---------- Fetching ---------- */
+/* ---------- Fetching (RSS primary, GNews fallback) ---------- */
 
+/**
+ * Google News RSS is the same engine behind a manual news.google.com
+ * search — it naturally surfaces diverse countries/sources instead of
+ * being dominated by whichever outlet republishes the most. It's used
+ * first; GNews API only kicks in if RSS comes back empty for a term.
+ * Near-duplicate titles (the same wire story in 5 outlets) are removed
+ * BEFORE the max_results cut, so real diversity survives the cap.
+ */
 function fetchNewsForRule_(rule) {
-  // GNews first: it returns the real publisher URL (readable). RSS only as fallback.
-  const gnews = fetchFromGNewsApi_(rule);
-  if (gnews.length) return gnews.slice(0, rule.maxResults);
-  log_('fetchNewsForRule', `GNews empty for "${rule.term}". Trying Google News RSS fallback.`);
-  return fetchFromGoogleNewsRss_(rule).slice(0, rule.maxResults);
+  const rssItems = fetchFromGoogleNewsRss_(rule);
+  let items = dedupeByTitle_(rssItems).slice(0, rule.maxResults);
+
+  if (!items.length) {
+    log_('fetchNewsForRule', `RSS empty for "${rule.term}". Trying GNews API fallback.`);
+    items = dedupeByTitle_(fetchFromGNewsApi_(rule)).slice(0, rule.maxResults);
+  }
+
+  // Cheap, local (no network) resolution of old-format Google News redirect
+  // links to the real publisher URL. New-format links that need a network
+  // call are resolved later, only for approved items (see 05_AISummary.gs),
+  // to keep this bulk search step fast and inside the execution time limit.
+  return items.map(item => {
+    if (item.link && item.link.indexOf('news.google.com') >= 0) {
+      const cheap = resolveArticleUrl_(item.link, /*allowNetwork*/ false);
+      if (cheap) item.link = cheap;
+    }
+    return item;
+  });
+}
+
+// Removes near-identical headlines (same wire story, different outlets)
+// using the same normalization the AI filter uses, so the search step and
+// the classification step agree on what counts as "the same article".
+// Keeps the FIRST occurrence (RSS/GNews already return newest-first).
+function dedupeByTitle_(items) {
+  const seen = new Set();
+  const out = [];
+  items.forEach(item => {
+    const norm = normalizeTitleForDedup_(item.title || '');
+    if (norm && seen.has(norm)) return;
+    if (norm) seen.add(norm);
+    out.push(item);
+  });
+  return out;
 }
 
 function fetchFromGoogleNewsRss_(rule) {
@@ -465,7 +510,15 @@ function fetchFromGoogleNewsRss_(rule) {
   const term = rule.matchType === 'exact' ? `"${escapeQuotes_(rule.term)}"` : rule.term;
   const days = Math.max(1, rule.days || APP.DEFAULTS.days);
   const params = { q: `${term} when:${days}d` };
-  if (rule.language) params.hl = rule.country ? `${rule.language}-${rule.country}` : rule.language;
+  // Only scope by language/country when the term row explicitly asks for
+  // it. Left blank (the default), the query stays global — this is what
+  // makes results match a plain manual Google News search instead of
+  // being skewed toward one market.
+  if (rule.language && rule.language !== APP.DEFAULTS.language) {
+    params.hl = rule.country ? `${rule.language}-${rule.country}` : rule.language;
+  } else if (rule.country) {
+    params.hl = `en-${rule.country}`;
+  }
   if (rule.country) { params.gl = rule.country; params.ceid = `${rule.country}:${rule.language || 'en'}`; }
 
   const url = APP.URLS.GOOGLE_NEWS_RSS + '?' + toQueryString_(params);
@@ -535,6 +588,10 @@ function fetchFromGNewsApi_(rule) {
       headers: { 'Accept': 'application/json', 'User-Agent': APP.USER_AGENT }
     });
     const code = resp.getResponseCode();
+    if (code === 403 || code === 429) {
+      log_('fetchFromGNewsApi', `QUOTA EXCEEDED (HTTP ${code}) for "${rule.term}". Not "no results" — the GNews plan limit was hit.`);
+      return [];
+    }
     if (code < 200 || code >= 300) {
       log_('fetchFromGNewsApi', `HTTP ${code} for "${rule.term}".`);
       return [];
@@ -611,6 +668,7 @@ function getKnownUrls_(resultsSheet) {
   }
   return set;
 }
+
 
 /* ========================================================================
  * SECTION: 03_Gemini.gs
@@ -691,6 +749,7 @@ function extractGeminiText_(json) {
 function stripJsonFences_(s) {
   return String(s || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 }
+
 
 /* ========================================================================
  * SECTION: 04_AIFilter.gs
@@ -972,7 +1031,7 @@ function prefilterReject_(title, description, source) {
     'pond rejuvenation',
     'music video', 'art on display', 'paintings from', 'galleries night',
     'literary prize', 'exposição', 'concerto', 'documentário', 'pillow cover',
-    'capital of', 'wuling',
+    'wuling',
     'ebola', 'ébola', 'hantavirus', 'hantavírus', 'measles', 'rodent-borne',
     'iguanas', 'sea turtles', 'tartarugas'
   ];
@@ -1026,6 +1085,7 @@ function getTipolisCountriesText_() {
     .filter(r => String(r[0] || '').trim())
     .map(r => `- ${r[0]} (${r[1]})`).join('\n');
 }
+
 
 /* ========================================================================
  * SECTION: 05_AISummary.gs
@@ -1098,7 +1158,20 @@ function generateSummaryForApprovedRow_(rowNumber) {
   const row = approved.getRange(rowNumber, 1, 1, APP.HEADERS.APPROVED.length).getValues()[0];
 
   try {
-    const pageText = fetchArticleText_(String(row[A.LINK - 1] || ''));   // read the real page
+    // Full resolution (including the slower batchexecute network path) only
+    // happens here, for the small set of approved items — not during bulk
+    // search — so a Google News redirect link doesn't block a full-text
+    // summary just because it wasn't resolved cheaply at search time.
+    let articleUrl = String(row[A.LINK - 1] || '');
+    if (articleUrl.indexOf('news.google.com') >= 0) {
+      const resolved = resolveArticleUrl_(articleUrl, /*allowNetwork*/ true);
+      if (resolved) {
+        articleUrl = resolved;
+        approved.getRange(rowNumber, A.LINK).setValue(resolved);
+      }
+    }
+
+    const pageText = fetchArticleText_(articleUrl);
     const out = callGeminiJson_(
       getSummarySystemPrompt_(),
       buildSummaryUserPrompt_(row, pageText),
@@ -1185,6 +1258,7 @@ function approveCheckedResultsNow() {
   }
   log_('approveCheckedResultsNow', `Approved ${count} row(s).`);
 }
+
 
 /* ========================================================================
  * SECTION: 06_Report.gs
@@ -1373,6 +1447,7 @@ function parseInlineMarkdown_(md) {
   return segments.length ? segments : [{ text: s, bold: false, italic: false, url: null }];
 }
 
+
 /* ========================================================================
  * SECTION: 07_Archive.gs
  * ====================================================================== */
@@ -1462,6 +1537,7 @@ function clearDataRows_(sheet, numCols) {
   }
 }
 
+
 /* ========================================================================
  * SECTION: 08_Triggers.gs
  * ====================================================================== */
@@ -1504,6 +1580,7 @@ function removeTriggersByHandler_(name) {
     if (t.getHandlerFunction() === name) ScriptApp.deleteTrigger(t);
   });
 }
+
 
 /* ========================================================================
  * SECTION: 09_WebApp.gs
@@ -1564,6 +1641,11 @@ function handleRequest_(e, method) {
       case 'POST /feedback':        return jsonOut_({ ok: true, data: api_submitFeedback_(body) });
 
       case 'POST /summary/build':   return jsonOut_({ ok: true, data: api_buildPendingSummaries_(body) });
+
+      // Manual link ingestion — paste a URL you found by hand and it gets
+      // scraped + inserted into search_results with every column filled,
+      // then classified immediately so it shows up in /triage.
+      case 'POST /manual/add':      return jsonOut_({ ok: true, data: api_addManualLink_(body) });
 
       default: return jsonOut_({ ok: false, error: 'Unknown route: ' + route });
     }
@@ -1725,8 +1807,119 @@ function api_approve_(body) {
 
 function api_reject_(body) {
   const sheet = sheet_(APP.SHEETS.RESULTS);
-  sheet.getRange(Number(body.row), APP.COL.RESULTS.AI_RELEVANCE).setValue('reject');
-  return { rejected: Number(body.row) };
+  const row = Number(body.row);
+  // category is what api_listTriage_ actually gates on (see 04_AIFilter.gs
+  // comments) — setting only ai_relevance never removed the item from the
+  // queue, so a rejected article kept coming back on every refresh.
+  sheet.getRange(row, APP.COL.RESULTS.AI_CATEGORY).setValue('reject');
+  sheet.getRange(row, APP.COL.RESULTS.AI_RELEVANCE).setValue('reject');
+  return { rejected: row };
+}
+
+/**
+ * Manual link ingestion. Body: { url: string, term?: string }
+ * Scrapes Open Graph / meta tags from the page, fills every search_results column
+ * the same way the automated search does, inserts the row, then runs a
+ * single (cheap, 1-article) Gemini classification so it's immediately
+ * visible in /triage with relevance/category/country/region set.
+ * A manually-added link is never auto-rejected by the AI or by any other
+ * automated step — you chose to add it, so it always reaches your triage
+ * screen for you to decide, even if Gemini fails or returns "reject".
+ */
+function api_addManualLink_(body) {
+  const url = normalizeUrl_(String(body.url || '').trim());
+  if (!url) throw new Error('URL is required.');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const resultsSheet = ss.getSheetByName(APP.SHEETS.RESULTS);
+  const knownUrls = getKnownUrls_(resultsSheet);
+  if (knownUrls.has(url)) {
+    throw new Error('This URL is already in search_results or approved_history.');
+  }
+
+  const meta = fetchArticleMetadata_(url);
+  const term = String(body.term || '').trim() || 'Manual';
+  const fetchedAt = formatDateTime_(new Date());
+
+  const row = buildResultRow_(term, {
+    publishedAt: meta.publishedAt || fetchedAt,
+    source: meta.source || meta.hostname,
+    title: meta.title || url,
+    link: url,
+    description: meta.description || '',
+    content: meta.content || ''
+  }, fetchedAt);
+  row[APP.COL.RESULTS.FILTER_STATUS - 1] = 'Pending';
+
+  const startRow = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
+  resultsSheet.getRange(startRow, 1, 1, APP.HEADERS.RESULTS.length).setValues([row]);
+  resultsSheet.getRange(startRow, 1, 1, 1).insertCheckboxes();
+  SpreadsheetApp.flush();
+
+  // A manual entry was already vetted by a human (you found it, you're
+  // adding it on purpose) — no AI or automated step is allowed to hide it
+  // from triage. The AI still runs, but only to fill country/region/
+  // relevance as helpful context; its "category" can never come back as
+  // "reject" for a manual row, and if the call fails entirely the row is
+  // still marked Done with safe defaults so it shows up immediately either
+  // way, instead of getting stuck as "Pending" (which would keep it out of
+  // /triage, since that view only lists FilterStatus="Done" rows).
+  let relevance = 'medium', category = 'industry', country = '', region = '',
+      reason = 'Manual entry — added by you, always shown regardless of AI classification.';
+  try {
+    const systemPrompt = buildFilterSystemPrompt_(getTipolisCountriesText_());
+    const out = callGeminiJson_(systemPrompt, buildFilterUserPrompt_(row), FILTER_SCHEMA_);
+    relevance = String(out.relevance || 'medium');
+    category = String(out.category || 'industry');
+    if (category === 'reject') category = 'industry';   // manual entries are never auto-rejected
+    if (relevance === 'reject') relevance = 'medium';
+    country = String(out.country || '');
+    region = String(out.region || '');
+    reason = String(out.reason || reason) + ' (manual entry — never auto-rejected)';
+  } catch (err) {
+    log_('addManualLink', `Classification failed, using safe defaults so the row still shows in triage: ${getErrorMessage_(err)}`);
+  }
+  resultsSheet.getRange(startRow, APP.COL.RESULTS.AI_RELEVANCE, 1, 5).setValues([[
+    relevance, category, country, region, reason
+  ]]);
+  resultsSheet.getRange(startRow, APP.COL.RESULTS.FILTER_STATUS).setValue('Done');
+
+  log_('addManualLink', `Manual link added at row ${startRow}: ${truncate_(url, 100)}`);
+  return { row: startRow, title: meta.title, source: meta.source, category: category, relevance: relevance };
+}
+
+// Scrapes title/description/source/publishedAt from a bare URL using
+// og:* and standard meta tags, falling back gracefully when absent.
+function fetchArticleMetadata_(url) {
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'get', muteHttpExceptions: true, followRedirects: true,
+    headers: { 'User-Agent': APP.USER_AGENT, 'Accept': 'text/html,application/xhtml+xml,*/*' }
+  });
+  const code = resp.getResponseCode();
+  if (code < 200 || code >= 300) throw new Error(`Could not fetch URL (HTTP ${code}).`);
+  const html = resp.getContentText();
+  const hostname = url.match(/^https?:\/\/([^\/]+)/) ? RegExp.$1.replace(/^www\./, '') : '';
+
+  const meta = (prop) => {
+    const m = html.match(new RegExp(
+      `<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`, 'i'
+    )) || html.match(new RegExp(
+      `<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'
+    ));
+    return m ? decodeHtml_(m[1]) : '';
+  };
+  const titleTagMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+
+  return {
+    title: meta('og:title') || (titleTagMatch ? decodeHtml_(titleTagMatch[1]) : ''),
+    description: meta('og:description') || meta('description'),
+    source: meta('og:site_name') || hostname,
+    hostname: hostname,
+    publishedAt: formatDateTimeFromValue_(
+      meta('article:published_time') || meta('og:updated_time') || ''
+    ),
+    content: fetchArticleText_(url)
+  };
 }
 
 /* ---------- Summary ---------- */
@@ -1841,6 +2034,7 @@ function api_historyCountries_() {
   });
   return Object.keys(map).map(k => map[k]).sort((a, b) => b.count - a.count);
 }
+
 
 /* ========================================================================
  * SECTION: 10_Helpers.gs
@@ -2129,7 +2323,7 @@ function testArticleReading() {
   var fullOk = 0, thin = 0;
   picked.forEach(function (p) {
     var isGN = p.link.indexOf('news.google.com') >= 0;
-    var resolved = resolveArticleUrl_(p.link);
+    var resolved = resolveArticleUrl_(p.link, /*allowNetwork*/ true);
     var fetchUrl = resolved || p.link;
     var chars = countArticleChars_(fetchUrl);
     var label = isGN ? (resolved ? 'GN->resolved' : 'GN->UNRESOLVED') : 'direct';
@@ -2173,8 +2367,16 @@ function countArticleChars_(url) {
   }
 }
 
-// Returns the real publisher URL, or null if it can't be resolved.
-function resolveArticleUrl_(url) {
+/**
+ * Resolves a Google News redirect link to the real publisher URL.
+ * allowNetwork=false (used during bulk search): only the cheap, local
+ * base64 decode is tried — no HTTP calls, so it can't blow the search
+ * step's execution-time budget. allowNetwork=true (used when approving/
+ * summarizing one article): also tries the slower batchexecute network
+ * path for "new-format" links the cheap decode can't handle.
+ * Returns null if it can't resolve (caller should keep the original link).
+ */
+function resolveArticleUrl_(url, allowNetwork) {
   if (!url) return null;
   if (url.indexOf('news.google.com') < 0) return url;   // already a direct URL (e.g. from GNews)
   var m = url.match(/\/(?:rss\/)?articles\/([^?\/]+)/) || url.match(/\/read\/([^?\/]+)/);
@@ -2182,6 +2384,7 @@ function resolveArticleUrl_(url) {
   var articleId = m[1];
   var decoded = decodeGoogleNewsBase64_(articleId);   // cheap path (old-format links)
   if (decoded) return decoded;
+  if (!allowNetwork) return null;
   return resolveViaBatchExecute_(articleId);           // fragile path (new-format links)
 }
 

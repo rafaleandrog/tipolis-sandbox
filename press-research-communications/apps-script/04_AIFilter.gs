@@ -274,7 +274,7 @@ function prefilterReject_(title, description, source) {
     'pond rejuvenation',
     'music video', 'art on display', 'paintings from', 'galleries night',
     'literary prize', 'exposição', 'concerto', 'documentário', 'pillow cover',
-    'capital of', 'wuling',
+    'wuling',
     'ebola', 'ébola', 'hantavirus', 'hantavírus', 'measles', 'rodent-borne',
     'iguanas', 'sea turtles', 'tartarugas'
   ];

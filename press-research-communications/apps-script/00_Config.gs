@@ -69,7 +69,7 @@ const APP = {
     case_sensitive: false,
     language: 'en',
     country: '',
-    max_results: 20,
+    max_results: 40,          // was 20 — raised so RSS-primary has room to work with
     gemini_model: 'gemini-2.5-flash',
     daily_search_hour: 6,    // daily search runs ~06:00
     weekly_filter_hour: 7    // weekly AI filter runs ~07:00 (margin after search)
