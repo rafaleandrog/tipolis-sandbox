@@ -16,11 +16,18 @@ function installAllTriggers() {
   ScriptApp.newTrigger('runDailyAIFilter')
     .timeBased().everyDays(1).atHour(APP.DEFAULTS.weekly_filter_hour).create();
 
-  log_('installAllTriggers', 'Daily search + daily AI classification triggers installed.');
+  // Midday safety net: if the morning chain of continuations is ever broken
+  // (a quota stop, a failed trigger), this picks the leftovers up the same
+  // day instead of letting them roll into tomorrow's fresh batch.
+  ScriptApp.newTrigger('runDailyAIFilter')
+    .timeBased().everyDays(1).atHour(APP.DEFAULTS.midday_filter_hour).create();
+
+  log_('installAllTriggers', 'Daily search + morning and midday AI classification triggers installed.');
   SpreadsheetApp.getUi().alert(
     'Triggers installed:\n' +
     `- Daily search ~${APP.DEFAULTS.daily_search_hour}:00\n` +
-    `- Daily AI classification ~${APP.DEFAULTS.weekly_filter_hour}:00`
+    `- Daily AI classification ~${APP.DEFAULTS.weekly_filter_hour}:00\n` +
+    `- Midday AI classification catch-up ~${APP.DEFAULTS.midday_filter_hour}:00`
   );
 }
 

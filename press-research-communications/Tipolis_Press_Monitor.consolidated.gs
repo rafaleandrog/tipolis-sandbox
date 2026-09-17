@@ -1,6 +1,9 @@
 /**************************************************************************
  * TIPOLIS PRESS MONITOR — Consolidated single-file build
  * --------------------------------------------------------------------------
+ * GENERATED FILE — do not edit by hand.
+ * Rebuild with: press-research-communications/apps-script/build_consolidated.sh
+ *
  * Generated from press-research-communications/apps-script/*.gs (11 files).
  * Paste this entire file into one .gs file in the Apps Script editor (e.g.
  * `Code.gs`) as a manual alternative to `clasp push`.
@@ -39,7 +42,8 @@ const APP = {
   HISTORY: 'approved_history',
   SETTINGS: 'report_settings',
   LOGS: 'logs',
-  FEEDBACK: 'feedback'
+  FEEDBACK: 'feedback',
+  TOPIC_KEYWORDS: 'topic_keywords'
 },
 
   HEADERS: {
@@ -68,7 +72,8 @@ const APP = {
     ],
     SETTINGS: ['key', 'value', 'description'],
     LOGS: ['DateTime', 'Step', 'Message'],
-    FEEDBACK: ['Timestamp', 'Page', 'Type', 'Title', 'Description', 'Status']
+    FEEDBACK: ['Timestamp', 'Page', 'Type', 'Title', 'Description', 'Status'],
+    TOPIC_KEYWORDS: ['keyword', 'mode', 'enabled', 'notes']
   },
 
   // Column indexes (1-based) for frequently used sheets
@@ -96,12 +101,14 @@ const APP = {
     max_results: 40,          // was 20 — raised so RSS-primary has room to work with
     gemini_model: 'gemini-2.5-flash',
     daily_search_hour: 6,    // daily search runs ~06:00
-    weekly_filter_hour: 7    // weekly AI filter runs ~07:00 (margin after search)
+    weekly_filter_hour: 7,   // AI classification runs ~07:00 (margin after search)
+    midday_filter_hour: 13   // catch-up pass if the morning chain was cut short
   },
 
   PROPERTIES: {
     LAST_NEWS_REQUEST_AT: 'LAST_NEWS_REQUEST_AT',
-    FILTER_PROGRESS: 'FILTER_PROGRESS'
+    FILTER_PROGRESS: 'FILTER_PROGRESS',
+    TERM_CURSOR: 'TERM_CURSOR'          // round-robin start for the row cap
   },
 
   URLS: {
@@ -114,7 +121,20 @@ const APP = {
     MAX_CONTENT_CHARS: 12000,
     NEWS_REQUEST_SPACING_MS: 1200,   // 1.2s between news requests
     FILTER_BATCH_SIZE: 60,           // articles per AI Filter execution chunk
-    GEMINI_MAX_RETRIES: 4
+    GEMINI_MAX_RETRIES: 4,
+
+    // Articles per Gemini classification call. Raised from 10 to 25: the
+    // per-article payload is small (source + title + 250 chars) and the
+    // free tier is limited by REQUESTS, not by tokens, so a bigger batch
+    // is the cheapest lever there is.
+    FILTER_AI_BATCH_SIZE: 25,
+    FILTER_AI_SPACING_MS: 6500,      // gap between classification calls
+    FILTER_SAFE_MS: 5 * 60 * 1000,   // stop and continue before the 6-min cap
+
+    // Fallbacks for the report_settings keys of the same name.
+    DEFAULT_GEMINI_DAILY_BUDGET: 200,
+    DEFAULT_MAX_ROWS_PER_SEARCH_RUN: 250,
+    MAX_LOG_ROWS: 4000
   },
 
   USER_AGENT:
@@ -157,7 +177,214 @@ const SETTINGS_SEED = [
   ['report_template_doc_id', '', 'Google Doc ID of the report template — PASTE HERE'],
   ['daily_search_auto_run', 'true', 'Toggle the daily search trigger'],
   ['weekly_filter_auto_run', 'true', 'Toggle the weekly AI filter trigger'],
-  ['frontend_bearer_token', '', 'Random 32+ char token the frontend must send — PASTE HERE']
+  ['daily_filter_auto_run', 'true', 'Toggle the daily AI classification trigger'],
+  ['frontend_bearer_token', '', 'Random 32+ char token the frontend must send — PASTE HERE'],
+  ['gemini_daily_request_budget', '200',
+    'Max Gemini requests per day. The filter stops cleanly at this number instead of discovering the quota by taking a 429.'],
+  ['max_rows_per_search_run', '250',
+    'Max rows a single daily search may write. Terms left over start first on the next run.'],
+  ['topic_gate_mode', 'skip',
+    'skip = off-topic articles are stored with FilterStatus="Skipped" (auditable, no AI cost); drop = not stored at all.'],
+  ['gnews_fallback_enabled', 'false',
+    'Call the GNews API when Google News RSS returns nothing. Empty RSS usually means "no news", so this is off by default to save the GNews quota.']
+];
+
+// Seed vocabulary for the topic_keywords sheet — the local gate that decides
+// whether a fetched article is worth a Gemini call at all.
+//
+// Two modes, and the difference between them is not a matter of taste:
+//
+//   'block'   — an article matching any enabled block keyword is parked.
+//               Measured against 721 real fetched articles: parks 31 percent
+//               of what the AI went on to reject, and ZERO of the 137
+//               articles the AI kept. Safe by default, so these ship enabled.
+//
+//   'require' — if ANY require keyword is enabled, an article must match at
+//               least one of them or it is parked. Much more aggressive, and
+//               measured as too aggressive: on the same 721 articles it
+//               parked 74 percent of everything, but also 45 percent of the
+//               ones the AI kept. A priority country doing something
+//               genuinely relevant ("Ecuador central bank raises growth
+//               forecast", "Cabo Verde industrial production up 11.7") rarely
+//               speaks free-zone vocabulary. These ship DISABLED. Enable them
+//               only for a specific ambiguous term, and re-measure.
+//
+// Columns: keyword, mode, enabled, notes.
+const TOPIC_KEYWORDS_SEED = [
+  ['air pollution', 'block', true, ''],
+  ['air quality index', 'block', true, ''],
+  ['album', 'block', true, ''],
+  ['analyst rating', 'block', true, ''],
+  ['athletics', 'block', true, ''],
+  ['backyard ultra', 'block', true, ''],
+  ['baseball', 'block', true, ''],
+  ['basketball', 'block', true, ''],
+  ['birthday', 'block', true, ''],
+  ['boxing', 'block', true, ''],
+  ['britannica', 'block', true, ''],
+  ['burning car', 'block', true, ''],
+  ['car crash', 'block', true, ''],
+  ['centenarian', 'block', true, ''],
+  ['championship', 'block', true, ''],
+  ['cheese days', 'block', true, ''],
+  ['cholera', 'block', true, ''],
+  ['cholera outbreak', 'block', true, ''],
+  ['church', 'block', true, ''],
+  ['coach said', 'block', true, ''],
+  ['cocaine', 'block', true, ''],
+  ['concacaf', 'block', true, ''],
+  ['concert', 'block', true, ''],
+  ['condolence', 'block', true, ''],
+  ['copa ', 'block', true, ''],
+  ['crash on', 'block', true, ''],
+  ['cricket match', 'block', true, ''],
+  ['dengue', 'block', true, ''],
+  ['dengue outbreak', 'block', true, ''],
+  ['diocese', 'block', true, ''],
+  ['disease outbreak', 'block', true, ''],
+  ['dividend yield', 'block', true, ''],
+  ['documentario', 'block', true, ''],
+  ['documentary', 'block', true, ''],
+  ['drought early action', 'block', true, ''],
+  ['drug bust', 'block', true, ''],
+  ['earthquake', 'block', true, ''],
+  ['ebola', 'block', true, ''],
+  ['exhibition', 'block', true, ''],
+  ['exposicao', 'block', true, ''],
+  ['fiery crash', 'block', true, ''],
+  ['film festival', 'block', true, ''],
+  ['fire department', 'block', true, ''],
+  ['firefighters', 'block', true, ''],
+  ['fixtures', 'block', true, ''],
+  ['flooding', 'block', true, ''],
+  ['food security outlook', 'block', true, ''],
+  ['football', 'block', true, ''],
+  ['funeral', 'block', true, ''],
+  ['galleries night', 'block', true, ''],
+  ['goalkeeper', 'block', true, ''],
+  ['golf', 'block', true, ''],
+  ['gols', 'block', true, ''],
+  ['hantavirus', 'block', true, ''],
+  ['head coach', 'block', true, ''],
+  ['homicide', 'block', true, ''],
+  ['hospitalizes', 'block', true, ''],
+  ['hourly weather', 'block', true, ''],
+  ['hurricane warning', 'block', true, ''],
+  ['if you invested', 'block', true, ''],
+  ['jv ', 'block', true, ''],
+  ['kick-off', 'block', true, ''],
+  ['kickoff', 'block', true, ''],
+  ['league table', 'block', true, ''],
+  ['libertadores', 'block', true, ''],
+  ['literary prize', 'block', true, ''],
+  ['live stream', 'block', true, ''],
+  ['maintained at sector perform', 'block', true, ''],
+  ['man arrested', 'block', true, ''],
+  ['marathon', 'block', true, ''],
+  ['mayan civilization', 'block', true, ''],
+  ['measles', 'block', true, ''],
+  ['measles outbreak', 'block', true, ''],
+  ['memorial service', 'block', true, ''],
+  ['midfielder', 'block', true, ''],
+  ['missing person', 'block', true, ''],
+  ['mission trip', 'block', true, ''],
+  ['movie', 'block', true, ''],
+  ['music video', 'block', true, ''],
+  ['obituary', 'block', true, ''],
+  ['olympic', 'block', true, ''],
+  ['painting', 'block', true, ''],
+  ['parish', 'block', true, ''],
+  ['passed away', 'block', true, ''],
+  ['pga', 'block', true, ''],
+  ['placar', 'block', true, ''],
+  ['playoff', 'block', true, ''],
+  ['police arrested', 'block', true, ''],
+  ['price prediction', 'block', true, ''],
+  ['price target', 'block', true, ''],
+  ['rainfall', 'block', true, ''],
+  ['recipe', 'block', true, ''],
+  ['rescued from', 'block', true, ''],
+  ['rugby', 'block', true, ''],
+  ['season opener', 'block', true, ''],
+  ['shares outstanding', 'block', true, ''],
+  ['shooting', 'block', true, ''],
+  ['soccer', 'block', true, ''],
+  ['softball', 'block', true, ''],
+  ['spanish colony', 'block', true, ''],
+  ['sports network', 'block', true, ''],
+  ['stabbing', 'block', true, ''],
+  ['stock forecast', 'block', true, ''],
+  ['stocks spotlight', 'block', true, ''],
+  ['striker', 'block', true, ''],
+  ['sudamericana', 'block', true, ''],
+  ['swimming', 'block', true, ''],
+  ['tennis', 'block', true, ''],
+  ['things to do', 'block', true, ''],
+  ['tourist guide', 'block', true, ''],
+  ['tournament', 'block', true, ''],
+  ['trail race', 'block', true, ''],
+  ['tropical storm', 'block', true, ''],
+  ['tv schedule', 'block', true, ''],
+  ['ultramarathon', 'block', true, ''],
+  ['varsity', 'block', true, ''],
+  ['volleyball', 'block', true, ''],
+  ['weather forecast', 'block', true, ''],
+  ['weekend events', 'block', true, ''],
+  ['where to watch', 'block', true, ''],
+  ['woman arrested', 'block', true, ''],
+  ['world cup', 'block', true, ''],
+  ['wrestling', 'block', true, ''],
+  ['sez', 'require', false, ''],
+  ['special economic zone', 'require', false, ''],
+  ['economic zone', 'require', false, ''],
+  ['free zone', 'require', false, ''],
+  ['free trade zone', 'require', false, ''],
+  ['freeport zone', 'require', false, ''],
+  ['free port', 'require', false, ''],
+  ['export processing zone', 'require', false, ''],
+  ['industrial park', 'require', false, ''],
+  ['industrial zone', 'require', false, ''],
+  ['industrial corridor', 'require', false, ''],
+  ['economic corridor', 'require', false, ''],
+  ['special administrative region', 'require', false, ''],
+  ['autonomous region', 'require', false, ''],
+  ['zona franca', 'require', false, ''],
+  ['zona economica especial', 'require', false, ''],
+  ['zona especial', 'require', false, ''],
+  ['area de livre comercio', 'require', false, ''],
+  ['charter city', 'require', false, ''],
+  ['private city', 'require', false, ''],
+  ['model city', 'require', false, ''],
+  ['network state', 'require', false, ''],
+  ['startup city', 'require', false, ''],
+  ['new city', 'require', false, ''],
+  ['city project', 'require', false, ''],
+  ['master plan', 'require', false, ''],
+  ['innovation district', 'require', false, ''],
+  ['regulatory sandbox', 'require', false, ''],
+  ['regulatory reform', 'require', false, ''],
+  ['governance reform', 'require', false, ''],
+  ['legislation', 'require', false, ''],
+  ['decree', 'require', false, ''],
+  ['jurisdiction', 'require', false, ''],
+  ['sovereign', 'require', false, ''],
+  ['investment', 'require', false, ''],
+  ['foreign direct investment', 'require', false, ''],
+  ['tax incentive', 'require', false, ''],
+  ['tax regime', 'require', false, ''],
+  ['concession', 'require', false, ''],
+  ['public-private partnership', 'require', false, ''],
+  ['memorandum of understanding', 'require', false, ''],
+  ['groundbreaking', 'require', false, ''],
+  ['infrastructure', 'require', false, ''],
+  ['port expansion', 'require', false, ''],
+  ['logistics hub', 'require', false, ''],
+  ['technology hub', 'require', false, ''],
+  ['citizenship by investment', 'require', false, ''],
+  ['residency by investment', 'require', false, ''],
+  ['golden visa', 'require', false, ''],
+  ['digital nomad', 'require', false, ''],
+  ['bitcoin bond', 'require', false, ''],
 ];
 
 
@@ -207,19 +434,29 @@ function createProjectSheets() {
   ensureSheet_(ss, APP.SHEETS.HISTORY, APP.HEADERS.HISTORY);
   ensureSheet_(ss, APP.SHEETS.SETTINGS, APP.HEADERS.SETTINGS);
   ensureSheet_(ss, APP.SHEETS.LOGS, APP.HEADERS.LOGS);
+  ensureSheet_(ss, APP.SHEETS.TOPIC_KEYWORDS, APP.HEADERS.TOPIC_KEYWORDS);
 
   formatTermsSheet_(ss.getSheetByName(APP.SHEETS.TERMS));
   formatResultsSheet_(ss.getSheetByName(APP.SHEETS.RESULTS));
   formatApprovedSheet_(ss.getSheetByName(APP.SHEETS.APPROVED));
 
+  formatTopicKeywordsSheet_(ss.getSheetByName(APP.SHEETS.TOPIC_KEYWORDS));
+
   seedCountriesIfEmpty_(ss.getSheetByName(APP.SHEETS.COUNTRIES));
   seedSettingsIfEmpty_(ss.getSheetByName(APP.SHEETS.SETTINGS));
+  ensureSettingsKeys_(ss.getSheetByName(APP.SHEETS.SETTINGS));
+  seedTopicKeywordsIfEmpty_(ss.getSheetByName(APP.SHEETS.TOPIC_KEYWORDS));
 
   log_('createProjectSheets', 'Project sheets created/repaired.');
   SpreadsheetApp.getUi().alert(
     'Project sheets are ready.\n\n' +
     'Next: open report_settings and paste your gemini_api_key, ' +
-    'report_drive_folder_id, report_template_doc_id, and frontend_bearer_token.'
+    'report_drive_folder_id, report_template_doc_id, and frontend_bearer_token.\n\n' +
+    'New: the topic_keywords sheet is the thematic gate. Rows with ' +
+    'mode="block" park local sport, obituaries, weather and accidents before ' +
+    'they can cost a Gemini call — those ship enabled. Rows with ' +
+    'mode="require" are much sharper and ship DISABLED on purpose: enabling ' +
+    'them also drops real news from priority countries. See the README.'
   );
 }
 
@@ -246,6 +483,44 @@ function seedSettingsIfEmpty_(sheet) {
   if (getLastDataRowInCols_(sheet, 1, APP.HEADERS.SETTINGS.length) >= 2) return;
   sheet.getRange(2, 1, SETTINGS_SEED.length, APP.HEADERS.SETTINGS.length).setValues(SETTINGS_SEED);
   log_('seedSettings', `Seeded ${SETTINGS_SEED.length} settings keys.`);
+}
+
+/**
+ * Adds report_settings keys introduced after the sheet was first created.
+ * seedSettingsIfEmpty_ only fires on a blank sheet, so without this an
+ * existing spreadsheet never picks up a new key and the code silently
+ * falls back to its hardcoded default.
+ */
+function ensureSettingsKeys_(sheet) {
+  const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.SETTINGS.length);
+  const existing = {};
+  if (last >= 2) {
+    sheet.getRange(2, 1, last - 1, 1).getValues()
+      .forEach(r => { existing[String(r[0] || '').trim()] = true; });
+  }
+  const missing = SETTINGS_SEED.filter(row => !existing[row[0]]);
+  if (!missing.length) return;
+  sheet.getRange(last + 1, 1, missing.length, APP.HEADERS.SETTINGS.length).setValues(missing);
+  log_('ensureSettingsKeys', `Added ${missing.length} missing setting(s): ${missing.map(m => m[0]).join(', ')}.`);
+}
+
+function seedTopicKeywordsIfEmpty_(sheet) {
+  if (getLastDataRowInCols_(sheet, 1, APP.HEADERS.TOPIC_KEYWORDS.length) >= 2) return;
+  const rows = TOPIC_KEYWORDS_SEED.map(r => [r[0], r[1], r[2] === true, r[3] || '']);
+  sheet.getRange(2, 1, rows.length, APP.HEADERS.TOPIC_KEYWORDS.length).setValues(rows);
+  const blocks = rows.filter(r => r[1] === 'block').length;
+  log_('seedTopicKeywords',
+    `Seeded ${rows.length} keyword(s): ${blocks} block (enabled), ${rows.length - blocks} require (disabled).`);
+}
+
+function formatTopicKeywordsSheet_(sheet) {
+  const rows = Math.max(sheet.getMaxRows(), 500);
+  const modeRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['block', 'require'], true).build();
+  sheet.getRange(2, 2, rows - 1, 1).setDataValidation(modeRule);
+  sheet.getRange(2, 3, rows - 1, 1).insertCheckboxes();
+  sheet.setColumnWidth(1, 260);
+  sheet.setColumnWidth(4, 320);
 }
 
 function formatTermsSheet_(sheet) {
@@ -319,44 +594,98 @@ function runSearchCore_(mode) {
 
     const knownUrls = getKnownUrls_(resultsSheet);  // results + history
     const fetchedAt = formatDateTime_(new Date());
-    let totalWritten = 0;
+    const topicVocab = getTopicKeywords_();
+    const gateMode = String(getSetting_('topic_gate_mode') || 'skip').trim().toLowerCase();
+    const maxRows = toPositiveInt_(
+      getSetting_('max_rows_per_search_run'), APP.LIMITS.DEFAULT_MAX_ROWS_PER_SEARCH_RUN);
 
-    log_('runSearchCore', `Started (${mode}). Active terms: ${rules.length}.`);
+    // One read, at the start. Before this the row cursor came from
+    // getNextEmptyRowInCols_ once per term — and that helper scans the
+    // whole sheet (maxRows x 16 columns), so 51 terms meant 51 full-sheet
+    // reads inside a 6-minute execution budget.
+    let writeCursor = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
+    let totalWritten = 0, totalOffTopic = 0, totalRows = 0;
+    // maxRows bounds the AI-bound rows, which is what costs money. Parked
+    // off-topic rows are free but not weightless — they still take sheet
+    // rows and write time — so they get a looser ceiling of their own.
+    const maxTotalRows = maxRows * 4;
 
-    for (const rule of rules) {
+    // Round-robin start: resume where the previous run stopped, so the row
+    // cap never starves the same tail terms day after day.
+    const props = PropertiesService.getScriptProperties();
+    const startAt = rules.length ? (Number(props.getProperty(APP.PROPERTIES.TERM_CURSOR) || 0) % rules.length) : 0;
+    const ordered = rules.slice(startAt).concat(rules.slice(0, startAt));
+    let processed = 0;
+
+    log_('runSearchCore',
+      `Started (${mode}). Active terms: ${rules.length}, starting at #${startAt + 1}. ` +
+      `Row cap: ${maxRows}. Topic gate: ${topicVocab.block.length + topicVocab.require.length} keyword(s), ` +
+      `${topicVocab.block.length} block / ${topicVocab.require.length} require, mode ${gateMode}.`);
+
+    for (const rule of ordered) {
+      if (totalWritten >= maxRows || totalRows >= maxTotalRows) {
+        const why = totalWritten >= maxRows
+          ? `Row cap of ${maxRows} AI-bound row(s) reached`
+          : `Hard cap of ${maxTotalRows} written row(s) reached`;
+        log_('runSearchCore', `${why}. ${ordered.length - processed} term(s) will start the next run.`);
+        break;
+      }
+      processed++;
       try {
         const items = fetchNewsForRule_(rule);
         const rowsForTerm = [];
-        let added = 0, dup = 0, invalid = 0;
+        let added = 0, dup = 0, invalid = 0, offTopic = 0;
         for (const item of items) {
           const link = normalizeUrl_(item.link);
           if (!link) { invalid++; continue; }
           if (knownUrls.has(link)) { dup++; continue; }
           if (!passesLocalMatchRule_(rule, item)) { invalid++; continue; }
-          rowsForTerm.push(buildResultRow_(rule.term, item, fetchedAt));
+
+          const row = buildResultRow_(rule.term, item, fetchedAt);
+          const gateVerdict = topicGateVerdict_(item, topicVocab);
+          if (gateVerdict) {
+            offTopic++;
+            if (gateMode === 'drop') { knownUrls.add(link); continue; }
+            // Default 'skip' mode: the article is not lost, it is parked.
+            // It costs no AI call and stays out of triage, but it is still
+            // in the sheet — which is the only way to audit what the gate
+            // throws away and tune topic_keywords against real data. The
+            // reason names the exact keyword, so a bad one is easy to find.
+            row[APP.COL.RESULTS.FILTER_STATUS - 1] = 'Skipped';
+            row[APP.COL.RESULTS.AI_REASON - 1] = 'Topic gate (' + gateVerdict + ').';
+          } else {
+            added++;
+          }
+          rowsForTerm.push(row);
           knownUrls.add(link);
-          added++;
         }
         // Write this term's rows now, not at the end of the whole loop —
         // see the file header comment for why.
         if (rowsForTerm.length) {
-          const startRow = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
-          resultsSheet.getRange(startRow, 1, rowsForTerm.length, APP.HEADERS.RESULTS.length)
+          resultsSheet.getRange(writeCursor, 1, rowsForTerm.length, APP.HEADERS.RESULTS.length)
             .setValues(rowsForTerm);
-          resultsSheet.getRange(startRow, 1, rowsForTerm.length, 1).insertCheckboxes();
+          resultsSheet.getRange(writeCursor, 1, rowsForTerm.length, 1).insertCheckboxes();
           SpreadsheetApp.flush();
-          totalWritten += rowsForTerm.length;
+          writeCursor += rowsForTerm.length;
+          totalRows += rowsForTerm.length;
         }
+        totalWritten += added;   // the cap counts rows that will cost an AI call
+        totalOffTopic += offTopic;
         log_('runSearchCore',
-          `Term "${rule.term}": ${items.length} fetched, ${added} new, ${dup} dup, ${invalid} filtered.`);
+          `Term "${rule.term}": ${items.length} fetched, ${added} new, ${dup} dup, ` +
+          `${invalid} filtered, ${offTopic} off-topic.`);
       } catch (err) {
         log_('runSearchCore', `Error for "${rule.term}": ${getErrorMessage_(err)}`);
       }
     }
 
-    log_('runSearchCore', totalWritten
-      ? `${totalWritten} row(s) written across ${rules.length} term(s).`
+    props.setProperty(APP.PROPERTIES.TERM_CURSOR,
+      String(rules.length ? (startAt + processed) % rules.length : 0));
+
+    log_('runSearchCore', totalWritten || totalOffTopic
+      ? `${totalWritten} row(s) queued for AI, ${totalOffTopic} parked as off-topic, across ${processed} term(s).`
       : 'No new rows.');
+    rotateLogs_();
   } finally {
     lock.releaseLock();
   }
@@ -490,7 +819,11 @@ function fetchNewsForRule_(rule) {
   const rssItems = fetchFromGoogleNewsRss_(rule);
   let items = dedupeByTitle_(rssItems).slice(0, rule.maxResults);
 
-  if (!items.length) {
+  // An empty RSS response almost always means "no news for this term in
+  // this window", not "the source failed" — so the GNews fallback mostly
+  // spends a limited third-party quota to confirm a zero. Off by default;
+  // flip gnews_fallback_enabled in report_settings to bring it back.
+  if (!items.length && isSettingTrue_('gnews_fallback_enabled', false)) {
     log_('fetchNewsForRule', `RSS empty for "${rule.term}". Trying GNews API fallback.`);
     items = dedupeByTitle_(fetchFromGNewsApi_(rule)).slice(0, rule.maxResults);
   }
@@ -506,6 +839,71 @@ function fetchNewsForRule_(rule) {
     }
     return item;
   });
+}
+
+/* ---------- Thematic gate ----------
+ * Runs AFTER the fetch and BEFORE the row is written. Search terms stay
+ * broad on purpose ("Uruguay", "freeport", "SEZ"); this gate is what stops
+ * the general news those terms drag in — local sport, obituaries, weather,
+ * traffic accidents — from consuming a Gemini classification.
+ *
+ * Two vocabularies, both in the topic_keywords sheet:
+ *   block   — matching any of these parks the article. Measured on 721 real
+ *             fetched articles: parks 31 percent of what the AI rejected and
+ *             none of what it kept. This is the one that ships enabled.
+ *   require — if any are enabled, an article must match one of them. Much
+ *             sharper and measurably too sharp for broad country terms (it
+ *             parked 45 percent of the articles the AI kept), so it ships
+ *             disabled and is meant to be switched on per experiment.
+ *
+ * An empty sheet, or one with everything disabled, turns the gate off.
+ */
+function getTopicKeywords_() {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('TOPIC_KEYWORDS_V2');
+  if (hit) { try { return JSON.parse(hit); } catch (e) { /* fall through */ } }
+
+  const empty = { block: [], require: [] };
+  const sheet = sheet_(APP.SHEETS.TOPIC_KEYWORDS);
+  if (!sheet) return empty;
+  const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.TOPIC_KEYWORDS.length);
+  if (last < 2) return empty;
+
+  const vocab = { block: [], require: [] };
+  sheet.getRange(2, 1, last - 1, 3).getValues().forEach(r => {
+    const keyword = normalizeForGate_(r[0]);
+    if (!keyword) return;
+    if (!toBoolean_(r[2], true)) return;
+    const mode = String(r[1] || 'block').trim().toLowerCase();
+    if (mode === 'require') vocab.require.push(keyword);
+    else vocab.block.push(keyword);
+  });
+  cache.put('TOPIC_KEYWORDS_V2', JSON.stringify(vocab), 600);   // re-read every 10 min
+  return vocab;
+}
+
+// Accent-insensitive so "zona economica especial" in the sheet matches
+// "zona econômica especial" in a Brazilian headline, and vice versa.
+function normalizeForGate_(text) {
+  return String(text || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+// Returns '' when the article passes, or the keyword that parked it.
+function topicGateVerdict_(item, vocab) {
+  if (!vocab || (!vocab.block.length && !vocab.require.length)) return '';
+  const hay = normalizeForGate_([item.title, item.description, item.source].join(' '));
+  if (!hay) return '';
+
+  for (let i = 0; i < vocab.block.length; i++) {
+    if (hay.indexOf(vocab.block[i]) >= 0) return 'blocked: ' + vocab.block[i];
+  }
+  if (!vocab.require.length) return '';
+  for (let i = 0; i < vocab.require.length; i++) {
+    if (hay.indexOf(vocab.require[i]) >= 0) return '';
+  }
+  return 'no required topic keyword';
 }
 
 // Removes near-identical headlines (same wire story, different outlets)
@@ -697,6 +1095,11 @@ function getKnownUrls_(resultsSheet) {
  * TIPOLIS PRESS MONITOR — 03_Gemini.gs
  * Thin wrapper around the Gemini generateContent REST endpoint.
  * Forces JSON output via responseMimeType + responseSchema.
+ *
+ * Quota handling lives here on purpose: a 429 is not one error but
+ * three (per minute, per day, per token-minute) with opposite correct
+ * responses, and the caller can only choose between them if this layer
+ * reports which one it was — and never burns extra quota retrying.
  **************************************************************/
 
 /**
@@ -704,9 +1107,10 @@ function getKnownUrls_(resultsSheet) {
  * @param {string} systemPrompt
  * @param {string} userPrompt
  * @param {Object} responseSchema  JSON schema object (Gemini dialect)
+ * @param {Object=} opts           { thinkingBudget: number }
  * @return {Object} parsed JSON
  */
-function callGeminiJson_(systemPrompt, userPrompt, responseSchema) {
+function callGeminiJson_(systemPrompt, userPrompt, responseSchema, opts) {
   const apiKey = getSetting_('gemini_api_key');
   if (!apiKey) throw new Error('Missing gemini_api_key in report_settings.');
   const model = getSetting_('gemini_model') || APP.DEFAULTS.gemini_model;
@@ -717,7 +1121,14 @@ function callGeminiJson_(systemPrompt, userPrompt, responseSchema) {
     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
     generationConfig: {
       temperature: 0.2,
-      responseMimeType: 'application/json'
+      responseMimeType: 'application/json',
+      // gemini-2.5-flash runs with dynamic "thinking" on by default. For
+      // classification (pure labelling against a fixed schema) that is
+      // latency and output tokens spent on nothing, so 04_AIFilter passes
+      // thinkingBudget: 0. Summaries keep the default (-1 = dynamic).
+      thinkingConfig: {
+        thinkingBudget: (opts && opts.thinkingBudget != null) ? opts.thinkingBudget : -1
+      }
     }
   };
   if (responseSchema) body.generationConfig.responseSchema = responseSchema;
@@ -725,6 +1136,7 @@ function callGeminiJson_(systemPrompt, userPrompt, responseSchema) {
   let lastErr = null;
   for (let attempt = 0; attempt <= APP.LIMITS.GEMINI_MAX_RETRIES; attempt++) {
     try {
+      countGeminiRequest_();
       const resp = UrlFetchApp.fetch(url, {
         method: 'post',
         muteHttpExceptions: true,
@@ -734,15 +1146,24 @@ function callGeminiJson_(systemPrompt, userPrompt, responseSchema) {
       });
       const code = resp.getResponseCode();
       const text = resp.getContentText();
+
+      if (code === 429) {
+        // Never retried here. Every retry is another request counted
+        // against the very quota that just ran out, and five calls 1.5s
+        // apart blow the per-minute limit on their own. The caller
+        // decides whether to wait out a per-minute cap or stop for the
+        // day — and it can only decide because err.geminiQuota says which.
+        const info = parseGeminiQuotaError_(text);
+        const err = new Error(
+          `Gemini HTTP 429 [${info.kind}] retryDelay=${info.retryDelaySec}s :: ${truncate_(text, 400)}`);
+        err.geminiQuota = info;
+        throw err;
+      }
       if (code === 503 || code >= 500) {
         // Server overloaded/temporary: back off progressively and retry.
         lastErr = new Error(`Gemini HTTP ${code}: ${truncate_(text, 300)}`);
         Utilities.sleep(2000 * (attempt + 1));   // 2s, 4s, 6s, 8s
         continue;
-      }
-      if (code === 429) {
-        // Quota exhausted: retrying won't help today. Fail fast.
-        throw new Error(`Gemini HTTP 429: ${truncate_(text, 300)}`);
       }
       if (code < 200 || code >= 300) {
         throw new Error(`Gemini HTTP ${code}: ${truncate_(text, 400)}`);
@@ -751,11 +1172,53 @@ function callGeminiJson_(systemPrompt, userPrompt, responseSchema) {
       if (!raw) throw new Error('Gemini returned empty content.');
       return JSON.parse(stripJsonFences_(raw));
     } catch (err) {
+      if (err && err.geminiQuota) throw err;   // quota errors go straight up
       lastErr = err;
-      if (attempt < APP.LIMITS.GEMINI_MAX_RETRIES) { Utilities.sleep(1500); continue; }
+      if (attempt < APP.LIMITS.GEMINI_MAX_RETRIES) { Utilities.sleep(1500 * (attempt + 1)); continue; }
     }
   }
   throw lastErr || new Error('Gemini call failed.');
+}
+
+/**
+ * Classifies a 429 body and keeps the raw text for the logs. Before this
+ * existed the logs only said "daily quota reached", which was the code's
+ * guess and not what the API answered — so there was no way to tell a
+ * 30-second rate limit from a wait-until-tomorrow one.
+ */
+function parseGeminiQuotaError_(text) {
+  const raw = String(text || '');
+  const rd = raw.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/);
+  const perDay = /PerDay|RequestsPerDay/i.test(raw);
+  const perMinute = /PerMinute|RequestsPerMinute|TokensPerMinute/i.test(raw);
+  return {
+    kind: perDay ? 'PER_DAY' : (perMinute ? 'PER_MINUTE' : 'UNKNOWN'),
+    retryDelaySec: rd ? Math.ceil(Number(rd[1])) : 0,
+    raw: truncate_(raw, 500)
+  };
+}
+
+/** Script-property key for today's request counter (quota resets at midnight PT). */
+function geminiCounterKey_() {
+  return 'GEMINI_REQ_' + Utilities.formatDate(new Date(), 'America/Los_Angeles', 'yyyy-MM-dd');
+}
+
+function countGeminiRequest_() {
+  const props = PropertiesService.getScriptProperties();
+  const key = geminiCounterKey_();
+  props.setProperty(key, String(Number(props.getProperty(key) || 0) + 1));
+}
+
+/**
+ * How much of the self-imposed daily request budget is left. Lets the
+ * filter stop cleanly instead of discovering the real ceiling by taking
+ * a 429 mid-batch.
+ */
+function geminiBudget_() {
+  const used = Number(PropertiesService.getScriptProperties().getProperty(geminiCounterKey_()) || 0);
+  const budget = toPositiveInt_(
+    getSetting_('gemini_daily_request_budget'), APP.LIMITS.DEFAULT_GEMINI_DAILY_BUDGET);
+  return { used: used, budget: budget, left: Math.max(0, budget - used) };
 }
 
 function extractGeminiText_(json) {
@@ -816,7 +1279,10 @@ function runAIFilter_() {
     const pending = [];
     for (let i = 0; i < data.length; i++) {
       const status = String(data[i][C.FILTER_STATUS - 1] || '');
-      if (status === 'Done' || status === 'Error' || status === 'Skipped') continue;
+      // 'Error' goes back into the queue (bumpErrorStatus_ caps it at three
+      // attempts). Leaving it out meant one transient network failure froze
+      // a row out of triage permanently, with nothing to say so.
+      if (status === 'Done' || status === 'Skipped' || status === 'Error x3') continue;
       pending.push({ rowNumber: i + 2, row: data[i] });
     }
     if (!pending.length) { log_('runAIFilter', 'Nothing pending.'); return; }
@@ -831,10 +1297,12 @@ function runAIFilter_() {
         String(p.row[C.SOURCE - 1] || '')
       );
       if (reason) {
-        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
-          'reject', 'reject', '', '', 'Pre-filtered: ' + reason, ''
+        // relevance stays 'low', never 'reject': category is the only gate
+        // (see api_listTriage_), and a contradictory relevance is exactly
+        // what fixHistoricalRelevanceMismatchesNow had to clean up by hand.
+        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 7).setValues([[
+          'low', 'reject', '', '', 'Pre-filtered: ' + reason, '', 'Done'
         ]]);
-        sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Done');
         preRejected++;
       } else {
         toClassify.push(p);
@@ -859,10 +1327,10 @@ function runAIFilter_() {
       const ownLink = normalizeUrl_(String(p.row[C.LINK - 1] || ''));
       const originalLink = norm ? seenTitles[norm] : '';
       if (originalLink && originalLink !== ownLink) {
-        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
-          'low', 'reject', '', '', 'Duplicate of an already-classified article this week.', originalLink
+        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 7).setValues([[
+          'low', 'reject', '', '', 'Duplicate of an already-classified article this week.',
+          originalLink, 'Done'
         ]]);
-        sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Done');
         duplicated++;
       } else {
         deduped.push(p);
@@ -871,34 +1339,83 @@ function runAIFilter_() {
     if (duplicated) { SpreadsheetApp.flush(); log_('runAIFilter', `Deduped ${duplicated} near-identical title(s) without AI.`); }
     if (!deduped.length) { log_('runAIFilter', 'All remaining rows were duplicates. Done.'); return; }
 
-    // 3) Batch the rest through Gemini (10 articles per call).
+    // 3) Batch the rest through Gemini.
     const systemPrompt = buildFilterSystemPrompt_(getTipolisCountriesText_());
-    const BATCH_SIZE = 10;
-    const SPACING_MS = 6500;
-    const SAFE_MS = 5 * 60 * 1000;
+    const BATCH_SIZE = APP.LIMITS.FILTER_AI_BATCH_SIZE;
+    const SPACING_MS = APP.LIMITS.FILTER_AI_SPACING_MS;
+    const SAFE_MS = APP.LIMITS.FILTER_SAFE_MS;
     const startTime = Date.now();
     let classified = 0;
+    let minuteRetries = 0;
+
+    // Stop at a self-imposed request budget instead of discovering the real
+    // ceiling by taking a 429 in the middle of a batch.
+    const budget = geminiBudget_();
+    if (!budget.left) {
+      scheduleFilterContinuationAfterQuotaReset_();
+      log_('runAIFilter',
+        `Daily budget of ${budget.budget} Gemini request(s) already spent (${budget.used} used). ` +
+        `${deduped.length} row(s) stay Pending; continuation re-armed for after the quota reset.`);
+      return;
+    }
+    let requestsLeft = budget.left;
 
     for (let b = 0; b < deduped.length; b += BATCH_SIZE) {
       if (Date.now() - startTime > SAFE_MS) {
-        scheduleFilterContinuation_();
+        scheduleFilterContinuation_(60);
         log_('runAIFilter', `Time budget reached after ${classified} classified. Continuation scheduled.`);
         return;
       }
+      if (requestsLeft <= 0) {
+        scheduleFilterContinuationAfterQuotaReset_();
+        log_('runAIFilter',
+          `Daily request budget exhausted after ${classified} classified. ` +
+          `${deduped.length - b} row(s) stay Pending; continuation re-armed for after the quota reset.`);
+        return;
+      }
+
       const batch = deduped.slice(b, b + BATCH_SIZE);
       let out;
       try {
-        out = callGeminiJson_(systemPrompt, buildFilterBatchUserPrompt_(batch), FILTER_BATCH_SCHEMA_);
+        requestsLeft--;
+        out = callGeminiJson_(systemPrompt, buildFilterBatchUserPrompt_(batch),
+                              FILTER_BATCH_SCHEMA_, { thinkingBudget: 0 });
       } catch (err) {
         const msg = getErrorMessage_(err);
-        if (msg.indexOf('429') >= 0) {
-          // Daily quota reached: STOP. Leave rows Pending for the next daily run. Do NOT re-arm.
-          removeTriggersByHandler_('runDailyAIFilter_continuation');
-          log_('runAIFilter', `Gemini daily quota reached. Stopping. ${classified} classified; remaining stay Pending for tomorrow.`);
+        const quota = err && err.geminiQuota;
+
+        if (quota && quota.kind === 'PER_MINUTE') {
+          // A per-minute cap is not the end of the day. Wait the delay the
+          // API itself asked for and retry the same batch.
+          minuteRetries++;
+          if (minuteRetries > 3) {
+            scheduleFilterContinuation_(5 * 60);
+            log_('runAIFilter',
+              `Per-minute limit kept firing after ${classified} classified. Continuation in 5 min.`);
+            return;
+          }
+          const wait = Math.min(70, Math.max(20, quota.retryDelaySec || 30));
+          log_('runAIFilter', `429 per-minute. Waiting ${wait}s and retrying the same batch (try ${minuteRetries}).`);
+          Utilities.sleep(wait * 1000);
+          b -= BATCH_SIZE;   // redo this batch
+          continue;
+        }
+
+        if (quota) {
+          // Daily (or unrecognised) quota. Never delete the continuation:
+          // doing that is what turned a one-morning outage into a backlog
+          // that the next day's fresh rows only made bigger. Re-arm past
+          // the reset instead, and log what the API actually said.
+          scheduleFilterContinuationAfterQuotaReset_();
+          log_('runAIFilter',
+            `Gemini quota (${quota.kind}). ${classified} classified this run; ` +
+            `${deduped.length - b} row(s) stay Pending. Continuation re-armed. API said: ${quota.raw}`);
           return;
         }
+
         batch.forEach(p => {
-          sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Error');
+          sheet.getRange(p.rowNumber, C.FILTER_STATUS)
+            .setValue(bumpErrorStatus_(p.row[C.FILTER_STATUS - 1]));
           sheet.getRange(p.rowNumber, C.AI_REASON).setValue(truncate_(msg, 200));
         });
         log_('runAIFilter', `Batch error (non-quota): ${truncate_(msg, 200)}`);
@@ -909,30 +1426,29 @@ function runAIFilter_() {
       const byId = {};
       results.forEach(r => { if (r && r.id != null) byId[Number(r.id)] = r; });
 
-      batch.forEach((p, idx) => {
+      const writes = batch.map((p, idx) => {
         const r = byId[idx + 1] || {};
         const category = String(r.category || 'industry');
         let relevance = String(r.relevance || 'low');
         // Defensive: `category` is the sole gate (see api_listTriage_). Never
         // let a stray "reject" relevance from the model hide a kept article.
         if (category !== 'reject' && relevance === 'reject') relevance = 'medium';
-        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
-          relevance,
-          category,
-          String(r.country || ''),
-          String(r.region || ''),
-          String(r.reason || ''),
-          ''
-        ]]);
-        sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Done');
         classified++;
+        return {
+          rowNumber: p.rowNumber,
+          values: [relevance, category, String(r.country || ''),
+                   String(r.region || ''), String(r.reason || ''), '', 'Done']
+        };
       });
+      writeFilterBlock_(sheet, writes);
       SpreadsheetApp.flush();
       Utilities.sleep(SPACING_MS);
     }
 
     removeTriggersByHandler_('runDailyAIFilter_continuation');
-    log_('runAIFilter', `Completed. ${preRejected} pre-filtered, ${duplicated} deduped, ${classified} AI-classified.`);
+    log_('runAIFilter',
+      `Completed. ${preRejected} pre-filtered, ${duplicated} deduped, ${classified} AI-classified. ` +
+      `Gemini requests used today: ${geminiBudget_().used}/${budget.budget}.`);
   } finally {
     lock.releaseLock();
   }
@@ -967,10 +1483,60 @@ function fixHistoricalRelevanceMismatchesNow() {
 
 function runDailyAIFilter_continuation() { runAIFilter_(); }
 
-function scheduleFilterContinuation_() {
+function scheduleFilterContinuation_(delaySeconds) {
   removeTriggersByHandler_('runDailyAIFilter_continuation');
   ScriptApp.newTrigger('runDailyAIFilter_continuation')
-    .timeBased().after(60 * 1000).create();
+    .timeBased().after(Math.max(60, delaySeconds || 60) * 1000).create();
+}
+
+/**
+ * Re-arms the continuation for shortly after the Gemini daily quota resets
+ * (midnight Pacific). The point is that hitting the daily cap must never
+ * leave the queue with nobody scheduled to come back for it.
+ */
+function scheduleFilterContinuationAfterQuotaReset_() {
+  removeTriggersByHandler_('runDailyAIFilter_continuation');
+  const tz = 'America/Los_Angeles';
+  const now = new Date();
+  // parseDate returns the absolute instant of midnight PT today; the next
+  // reset is 24h later. ScriptApp.at() takes an absolute Date, so no
+  // timezone conversion is needed beyond this.
+  const todayPt = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  const startOfTodayPt = Utilities.parseDate(todayPt + ' 00:00:00', tz, 'yyyy-MM-dd HH:mm:ss');
+  let next = new Date(startOfTodayPt.getTime() + (24 * 60 + 15) * 60 * 1000);
+  if (next.getTime() <= now.getTime() + 60 * 1000) {
+    next = new Date(now.getTime() + 60 * 60 * 1000);   // safety: at least an hour out
+  }
+  ScriptApp.newTrigger('runDailyAIFilter_continuation').timeBased().at(next).create();
+  log_('runAIFilter', `Continuation re-armed for ${formatDateTime_(next)} (after the quota reset).`);
+}
+
+/**
+ * Writes a whole batch's AI columns in as few calls as possible.
+ * AI_RELEVANCE(10) through FILTER_STATUS(16) are contiguous, and the rows
+ * of a batch almost always are too, so a batch that used to cost 20 range
+ * calls (two per row, plus a flush) now costs about one.
+ */
+function writeFilterBlock_(sheet, writes) {
+  if (!writes || !writes.length) return;
+  const C = APP.COL.RESULTS;
+  const width = C.FILTER_STATUS - C.AI_RELEVANCE + 1;
+  const sorted = writes.slice().sort((a, b) => a.rowNumber - b.rowNumber);
+  let i = 0;
+  while (i < sorted.length) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1].rowNumber === sorted[j].rowNumber + 1) j++;
+    const block = sorted.slice(i, j + 1).map(w => w.values);
+    sheet.getRange(sorted[i].rowNumber, C.AI_RELEVANCE, block.length, width).setValues(block);
+    i = j + 1;
+  }
+}
+
+/** 'Error' -> 'Error x2' -> 'Error x3' (final). Bounds the retry loop. */
+function bumpErrorStatus_(current) {
+  const m = String(current || '').match(/^Error(?:\s*x(\d+))?$/i);
+  const next = m ? Number(m[1] || 1) + 1 : 1;
+  return next >= 3 ? 'Error x3' : 'Error x' + next;
 }
 
 /* ---------- Prompt building ---------- */
@@ -1579,11 +2145,18 @@ function installAllTriggers() {
   ScriptApp.newTrigger('runDailyAIFilter')
     .timeBased().everyDays(1).atHour(APP.DEFAULTS.weekly_filter_hour).create();
 
-  log_('installAllTriggers', 'Daily search + daily AI classification triggers installed.');
+  // Midday safety net: if the morning chain of continuations is ever broken
+  // (a quota stop, a failed trigger), this picks the leftovers up the same
+  // day instead of letting them roll into tomorrow's fresh batch.
+  ScriptApp.newTrigger('runDailyAIFilter')
+    .timeBased().everyDays(1).atHour(APP.DEFAULTS.midday_filter_hour).create();
+
+  log_('installAllTriggers', 'Daily search + morning and midday AI classification triggers installed.');
   SpreadsheetApp.getUi().alert(
     'Triggers installed:\n' +
     `- Daily search ~${APP.DEFAULTS.daily_search_hour}:00\n` +
-    `- Daily AI classification ~${APP.DEFAULTS.weekly_filter_hour}:00`
+    `- Daily AI classification ~${APP.DEFAULTS.weekly_filter_hour}:00\n` +
+    `- Midday AI classification catch-up ~${APP.DEFAULTS.midday_filter_hour}:00`
   );
 }
 
@@ -1651,6 +2224,8 @@ function handleRequest_(e, method) {
       case 'GET /report/preview':   return jsonOut_({ ok: true, data: api_reportPreview_() });
       case 'POST /report/generate': return jsonOut_({ ok: true, data: api_generateReport_() });
       case 'POST /report/archive':  return jsonOut_({ ok: true, data: api_archive_(body) });
+
+      case 'GET /status':           return jsonOut_({ ok: true, data: api_status_() });
 
       case 'GET /history':          return jsonOut_({ ok: true, data: api_history_(e.parameter) });
       case 'GET /history/countries':return jsonOut_({ ok: true, data: api_historyCountries_() });
@@ -1783,14 +2358,51 @@ function api_saveCountries_(body) {
 
 /* ---------- Triage ---------- */
 
+/**
+ * Pipeline health for the frontend banner: how much is waiting on the AI,
+ * how much was parked off-topic, and how much of today's Gemini request
+ * budget is gone. Without this the only symptom of a stalled classifier is
+ * a triage queue that quietly stops growing.
+ */
+function api_status_() {
+  const sheet = sheet_(APP.SHEETS.RESULTS);
+  const C = APP.COL.RESULTS;
+  const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
+  const counts = { total: 0, queue: 0, pending: 0, skipped: 0, error: 0, rejected: 0, approved: 0 };
+
+  if (last >= 2) {
+    const width = C.FILTER_STATUS - C.AI_CATEGORY + 1;
+    const cats = sheet.getRange(2, C.AI_CATEGORY, last - 1, width).getValues();
+    const approvedFlags = sheet.getRange(2, C.APPROVED, last - 1, 1).getValues();
+    cats.forEach((r, i) => {
+      counts.total++;
+      const category = String(r[0] || '');
+      const status = String(r[width - 1] || '');
+      if (approvedFlags[i][0] === true) { counts.approved++; return; }
+      if (status === 'Done') {
+        if (category === 'reject') counts.rejected++; else counts.queue++;
+      } else if (status === 'Skipped') counts.skipped++;
+      else if (status.indexOf('Error') === 0) counts.error++;
+      else counts.pending++;
+    });
+  }
+  return { counts: counts, gemini: geminiBudget_() };
+}
+
 function api_listTriage_(params) {
   const sheet = sheet_(APP.SHEETS.RESULTS);
   const C = APP.COL.RESULTS;
   const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
   if (last < 2) return [];
   const showRejected = params && params.showRejected === 'true';
-  const allDates = params && params.allDates === 'true';
-  const win = getReportWindow_();
+  // No date filter. The triage queue is "everything not rejected yet" —
+  // by you or by the AI. It used to be limited to getReportWindow_(), which
+  // is the *previous* Monday-to-Sunday; since the daily search only looks
+  // back a couple of days, almost nothing it fetched could ever fall inside
+  // that window, so freshly classified articles were invisible by default.
+  // getReportWindow_() is still the right rule for the weekly report and
+  // the archive (06_Report.gs / 07_Archive.gs) — just not for this queue.
+  // `allDates` is accepted and ignored, so an older frontend keeps working.
   const data = sheet.getRange(2, 1, last - 1, APP.HEADERS.RESULTS.length).getValues();
   const out = [];
   data.forEach((r, i) => {
@@ -1804,10 +2416,6 @@ function api_listTriage_(params) {
     // 04_AIFilter.gs for the classifier-side half of this fix.
     if (!showRejected && category === 'reject') return;
     if (r[C.APPROVED - 1] === true) return;
-    if (!allDates) {
-      const pub = parseDateLoose_(r[C.PUBLISHED_AT - 1]);
-      if (!pub || pub < win.start || pub > win.end) return;   // report-window only
-    }
     out.push({
       row: i + 2,
       term: r[C.TERM - 1], publishedAt: r[C.PUBLISHED_AT - 1], source: r[C.SOURCE - 1],
@@ -1887,7 +2495,8 @@ function api_addManualLink_(body) {
       reason = 'Manual entry — added by you, always shown regardless of AI classification.';
   try {
     const systemPrompt = buildFilterSystemPrompt_(getTipolisCountriesText_());
-    const out = callGeminiJson_(systemPrompt, buildFilterUserPrompt_(row), FILTER_SCHEMA_);
+    const out = callGeminiJson_(systemPrompt, buildFilterUserPrompt_(row), FILTER_SCHEMA_,
+                                { thinkingBudget: 0 });
     relevance = String(out.relevance || 'medium');
     category = String(out.category || 'industry');
     if (category === 'reject') category = 'industry';   // manual entries are never auto-rejected
@@ -2084,6 +2693,18 @@ function isAutoRunOn_(key) {
   return v !== 'false' && v !== 'off' && v !== '0' && v !== 'no';
 }
 
+/**
+ * Reads a boolean setting with an explicit default for the missing/blank
+ * case. isAutoRunOn_ treats an absent key as ON, which is right for the
+ * automation switches but wrong for anything that should stay off until
+ * somebody asks for it.
+ */
+function isSettingTrue_(key, fallback) {
+  const v = String(getSetting_(key) || '').trim().toLowerCase();
+  if (!v) return fallback === true;
+  return v === 'true' || v === 'on' || v === '1' || v === 'yes' || v === 'sim';
+}
+
 function pauseDailyAutomation() {
   setSetting_('daily_search_auto_run', 'false');
   setSetting_('daily_filter_auto_run', 'false');
@@ -2224,7 +2845,17 @@ function decodeHtml_(text) {
     .replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>');
 }
 
-function normalizeUrl_(url) { return String(url || '').trim(); }
+function normalizeUrl_(url) {
+  let u = String(url || '').trim();
+  if (!u) return '';
+  // Tracking parameters make the same article look like two different URLs,
+  // which defeats the dedup in getKnownUrls_ and approvedLinkExists_.
+  u = u.replace(/([?&])(utm_[^=&]*|fbclid|gclid|mc_cid|mc_eid|igshid|ref_src)=[^&]*/gi, '$1')
+       .replace(/[?&]{2,}/g, '&')
+       .replace(/[?&]$/, '')
+       .replace(/\/$/, '');
+  return u;
+}
 function normalizeMatchType_(v) { return String(v || '').trim().toLowerCase() === 'exact' ? 'exact' : 'broad'; }
 function normalizeLanguage_(v) { return (String(v || '').trim().toLowerCase()) || APP.DEFAULTS.language; }
 function normalizeCountry_(v) { return String(v || '').trim().toUpperCase(); }
@@ -2281,9 +2912,26 @@ function log_(step, message) {
     sheet.getRange(1, 1, 1, APP.HEADERS.LOGS.length).setValues([APP.HEADERS.LOGS]);
     sheet.setFrozenRows(1);
   }
-  const row = getNextEmptyRowInCols_(sheet, 1, APP.HEADERS.LOGS.length);
-  sheet.getRange(row, 1, 1, APP.HEADERS.LOGS.length)
-    .setValues([[formatDateTime_(new Date()), step, message]]);
+  // appendRow uses the sheet's own row pointer. The previous version called
+  // getNextEmptyRowInCols_, which reads the entire sheet — on a log grown to
+  // ~9,000 rows that was a full scan per log line, ~60 times per search run.
+  sheet.appendRow([formatDateTime_(new Date()), step, message]);
+}
+
+/**
+ * Keeps the logs sheet bounded. Without this it only ever grows, and every
+ * read of it gets slower along with it.
+ */
+function rotateLogs_() {
+  try {
+    const sheet = sheet_(APP.SHEETS.LOGS);
+    if (!sheet) return;
+    const last = sheet.getLastRow();
+    const max = APP.LIMITS.MAX_LOG_ROWS;
+    if (last > max + 1) sheet.deleteRows(2, last - max);
+  } catch (e) {
+    // Never let log housekeeping break the run that triggered it.
+  }
 }
 
 // Fetches the real article page so the summary is built from full text, not just the feed snippet.

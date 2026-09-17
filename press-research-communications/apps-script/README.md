@@ -81,8 +81,8 @@ same file risks overwriting work.
 | `00_Config.gs` | Sheet names, column maps, defaults, seeds |
 | `01_Menu_Setup.gs` | Spreadsheet menu + project bootstrap |
 | `02_Search.gs` | Daily Google News / GNews search |
-| `03_Gemini.gs` | Gemini REST wrapper |
-| `04_AIFilter.gs` | Weekly relevance + category classifier |
+| `03_Gemini.gs` | Gemini REST wrapper + quota accounting |
+| `04_AIFilter.gs` | Relevance + category classifier (quota-aware, resumable) |
 | `05_AISummary.gs` | Per-article bullet generation |
 | `06_Report.gs` | Doc template copy + markdown injection |
 | `07_Archive.gs` | Move approved_news → approved_history, reset |
@@ -91,3 +91,84 @@ same file risks overwriting work.
 | `10_Helpers.gs` | Settings, dates, sheet utilities, logging |
 | `appsscript.json` | Apps Script manifest (timezone, webapp config) |
 | `.clasp.json` | Maps this folder to a specific Apps Script project |
+| `build_consolidated.sh` | Regenerates `../Tipolis_Press_Monitor.consolidated.gs` |
+| `test/topic_gate.test.js` | Measures the thematic gate against real fetched articles |
+
+> `Tipolis_Press_Monitor.consolidated.gs` is generated. After changing any
+> `.gs` file here, run `./build_consolidated.sh` — that file is what gets
+> pasted into the Apps Script editor, so a stale copy means the deployed
+> code and the repo disagree.
+
+## Cost control: how a day's articles reach the classifier
+
+The Gemini free tier is limited by **requests**, so everything below exists
+to keep the number of classification calls proportional to the number of
+articles actually worth reading.
+
+1. **Search terms stay broad** (`search_terms`): `Uruguay`, `freeport`,
+   `SEZ`. Narrowing them at the query would cost recall.
+2. **Thematic gate** (`topic_keywords`, `topicGateVerdict_` in `02_Search.gs`):
+   runs after the fetch and before the row is written. Two vocabularies in
+   one sheet, chosen by the `mode` column:
+   - `block` — matching any enabled block keyword parks the article. This is
+     the sport, obituary, weather, accident and analyst-note vocabulary, and
+     it ships **enabled**.
+   - `require` — if any are enabled, an article must match one of them. Much
+     sharper, and ships **disabled** on purpose (see the measurement below).
+
+   `topic_gate_mode` decides what "parked" means: `skip` (default) writes the
+   row with `FilterStatus="Skipped"` — no AI cost, not in triage, but still
+   auditable, and the `ai_reason` column names the exact keyword that parked
+   it; `drop` does not write it at all. An empty sheet disables the gate.
+
+   **Why `require` ships off.** Both modes were measured against 721 real
+   fetched articles, using Gemini's own verdict as ground truth
+   (`test/topic_gate.test.js`):
+
+   | vocabulary | articles parked | of those the AI **rejected** | of those the AI **kept** |
+   |---|---|---|---|
+   | `block` only (shipped) | 16% | 31% | **0%** |
+   | `require` on | 74% | 89% | **45%** |
+
+   `require` looks like the bigger win until the last column: it parks nearly
+   half the news that should have reached triage. A priority country doing
+   something genuinely relevant — "Ecuador central bank raises growth
+   forecast", "Cabo Verde industrial production up 11.7%", "Paraguay ranks
+   second in relocation index" — rarely speaks free-zone vocabulary. The
+   country is already the qualifier there, so requiring more only loses
+   coverage. Enable `require` rows for one specific ambiguous term if you
+   like, and re-run the test before trusting it.
+
+   Run the test after any edit to the vocabulary:
+
+   ```bash
+   node press-research-communications/apps-script/test/topic_gate.test.js
+   ```
+
+   It fails if the gate parks even one article the classifier kept, or if it
+   stops catching at least a quarter of the ones it rejected.
+3. **Row cap** (`max_rows_per_search_run`): a single search writes at most
+   this many AI-bound rows. Terms that did not fit start the next run, so the
+   cap rotates instead of always starving the tail of the list.
+4. **Blocklist** (`prefilterReject_`): literal noise strings, rejected
+   without an AI call.
+5. **Title dedup**: the same wire story across outlets costs one call, not five.
+6. **Batching**: `FILTER_AI_BATCH_SIZE` articles per Gemini call, with
+   `thinkingBudget: 0` — classification is labelling, not reasoning.
+7. **Request budget** (`gemini_daily_request_budget`): the filter stops
+   cleanly at this number rather than discovering the real ceiling by taking
+   a 429 mid-batch.
+
+### When a 429 does happen
+
+`parseGeminiQuotaError_` separates a per-minute cap from a per-day one and
+keeps the API's own response text in the `logs` sheet:
+
+- **per minute** — wait the `retryDelay` the API asked for and retry the
+  same batch (up to three times, then continue in five minutes);
+- **per day** — re-arm the continuation trigger for just after the quota
+  resets (midnight Pacific) and leave the remaining rows `Pending`.
+
+The continuation trigger is never deleted on a quota error. Deleting it is
+what turns one bad morning into a permanent backlog, because the next day's
+fresh search lands on top of the rows nobody came back for.

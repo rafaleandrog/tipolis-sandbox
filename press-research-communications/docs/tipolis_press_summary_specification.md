@@ -109,12 +109,53 @@ Próspera, Destiny, ZEDE, SSZ, Gelephu Mindfulness City, TechParkCV, Sherbro Isl
 
 ### Rules
 
-- **`category` is the ONLY field that decides whether an article is kept or dropped.** It is what `api_listTriage_` gates the triage screen on and what `readApprovedItems_`/`injectSection_` use to place an item in the report. `relevance` never gates anything — see below.
+- **`category` is the ONLY field that decides whether an article is kept or dropped.** It is what `api_listTriage_` gates the triage screen on (together with `FilterStatus="Done"` and the `Approved` checkbox — there is no date filter: the queue is everything classified and not yet rejected, whatever its publish date. The Monday-to-Sunday window in `getReportWindow_()` governs the weekly report and the archive, not this queue) and what `readApprovedItems_`/`injectSection_` use to place an item in the report. `relevance` never gates anything — see below.
 - **tipolis** — the article ties a priority country OR a tracked project to a relevant topic (SEZ, free zone, private city, charter city, governance, investment, infrastructure, citizenship, regulatory reform).
 - **industry** — the article concerns SEZs, free zones, private/charter cities, network states, regulatory sandboxes, governance innovation, industrial corridors, technology hubs, in a country NOT on the priority list.
 - **reject** — mentions a priority country but for an unrelated topic (sports, weather, entertainment, generic crime); or is promotional/opinion-only/fact-free; or is a duplicate of an item already approved this week or already in `approved_history` (near-duplicate titles within the same week are also caught locally before the Gemini call — see `normalizeTitleForDedup_` in `04_AIFilter.gs`).
 - Ties go to **tipolis** when there is any clear link to a priority country, project, stakeholder, or strategic theme.
 - `relevance` is **never** `"reject"` and must never contradict `category`: it is only a priority/ordering signal (`high`/`medium`/`low`) for articles whose `category` is `tipolis` or `industry`. When `category` is `reject`, `relevance` is `low` (still required by the schema, but without effect). This was previously a second, independent enum that included `"reject"`; in practice the model set it inconsistently with `category` on roughly 1 in 5 articles, silently hiding relevant news from triage. The schema and prompt now forbid `relevance:"reject"` outright, and the classifier also applies a defensive server-side coercion as a second line of defense.
+
+### What reaches the classifier at all
+
+The Gemini free tier is metered in **requests**, so the pipeline is built to
+keep the number of classification calls proportional to the number of
+articles that are plausibly about the beat — not to the number of articles a
+broad search term drags in.
+
+Search terms stay deliberately broad (`Uruguay`, `freeport`, `SEZ`). The
+filtering happens after the fetch, in this order:
+
+1. **Thematic gate** (`topic_keywords` sheet, `topicGateVerdict_` in
+   `02_Search.gs`) — two vocabularies chosen by the sheet's `mode` column.
+   `block` keywords park an article outright (sport, obituaries, weather,
+   accidents, analyst notes) and ship enabled; `require` keywords demand a
+   positive topic match and ship disabled, because measuring both against
+   721 real articles showed `require` parks 45% of the news the classifier
+   kept while `block` parks none of it. With `topic_gate_mode = skip`
+   (default) a parked article is still stored as `FilterStatus="Skipped"`
+   with the offending keyword in `ai_reason`, so the gate can be audited;
+   with `drop` it is not stored. `apps-script/test/topic_gate.test.js` is
+   the regression test for this.
+2. **Row cap** (`max_rows_per_search_run`) — bounds a single search run.
+   Terms that did not fit start the next run, so the cap rotates rather than
+   permanently starving the tail of `search_terms`.
+3. **Blocklist** (`prefilterReject_`) — literal noise strings, no AI call.
+4. **Title dedup** (`normalizeTitleForDedup_`) — one wire story across five
+   outlets costs one call.
+5. **Batching** — `FILTER_AI_BATCH_SIZE` articles per call, with
+   `thinkingBudget: 0`, because classification is labelling against a fixed
+   schema rather than reasoning.
+6. **Request budget** (`gemini_daily_request_budget`) — the filter stops at
+   a number it chose, instead of discovering the real ceiling by taking a
+   429 in the middle of a batch.
+
+A 429 that does arrive is classified by `parseGeminiQuotaError_`: a
+per-minute cap is waited out and the batch retried, while a per-day cap
+re-arms the continuation trigger for just after the quota resets. The
+continuation is never deleted — that is what turns a single bad morning into
+a permanent backlog, since the next day's search lands on top of the rows
+nobody came back for.
 
 ### Country and region extraction (required for every item)
 
