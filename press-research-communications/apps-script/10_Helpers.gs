@@ -23,6 +23,18 @@ function isAutoRunOn_(key) {
   return v !== 'false' && v !== 'off' && v !== '0' && v !== 'no';
 }
 
+/**
+ * Reads a boolean setting with an explicit default for the missing/blank
+ * case. isAutoRunOn_ treats an absent key as ON, which is right for the
+ * automation switches but wrong for anything that should stay off until
+ * somebody asks for it.
+ */
+function isSettingTrue_(key, fallback) {
+  const v = String(getSetting_(key) || '').trim().toLowerCase();
+  if (!v) return fallback === true;
+  return v === 'true' || v === 'on' || v === '1' || v === 'yes' || v === 'sim';
+}
+
 function pauseDailyAutomation() {
   setSetting_('daily_search_auto_run', 'false');
   setSetting_('daily_filter_auto_run', 'false');
@@ -163,7 +175,17 @@ function decodeHtml_(text) {
     .replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>');
 }
 
-function normalizeUrl_(url) { return String(url || '').trim(); }
+function normalizeUrl_(url) {
+  let u = String(url || '').trim();
+  if (!u) return '';
+  // Tracking parameters make the same article look like two different URLs,
+  // which defeats the dedup in getKnownUrls_ and approvedLinkExists_.
+  u = u.replace(/([?&])(utm_[^=&]*|fbclid|gclid|mc_cid|mc_eid|igshid|ref_src)=[^&]*/gi, '$1')
+       .replace(/[?&]{2,}/g, '&')
+       .replace(/[?&]$/, '')
+       .replace(/\/$/, '');
+  return u;
+}
 function normalizeMatchType_(v) { return String(v || '').trim().toLowerCase() === 'exact' ? 'exact' : 'broad'; }
 function normalizeLanguage_(v) { return (String(v || '').trim().toLowerCase()) || APP.DEFAULTS.language; }
 function normalizeCountry_(v) { return String(v || '').trim().toUpperCase(); }
@@ -220,9 +242,26 @@ function log_(step, message) {
     sheet.getRange(1, 1, 1, APP.HEADERS.LOGS.length).setValues([APP.HEADERS.LOGS]);
     sheet.setFrozenRows(1);
   }
-  const row = getNextEmptyRowInCols_(sheet, 1, APP.HEADERS.LOGS.length);
-  sheet.getRange(row, 1, 1, APP.HEADERS.LOGS.length)
-    .setValues([[formatDateTime_(new Date()), step, message]]);
+  // appendRow uses the sheet's own row pointer. The previous version called
+  // getNextEmptyRowInCols_, which reads the entire sheet — on a log grown to
+  // ~9,000 rows that was a full scan per log line, ~60 times per search run.
+  sheet.appendRow([formatDateTime_(new Date()), step, message]);
+}
+
+/**
+ * Keeps the logs sheet bounded. Without this it only ever grows, and every
+ * read of it gets slower along with it.
+ */
+function rotateLogs_() {
+  try {
+    const sheet = sheet_(APP.SHEETS.LOGS);
+    if (!sheet) return;
+    const last = sheet.getLastRow();
+    const max = APP.LIMITS.MAX_LOG_ROWS;
+    if (last > max + 1) sheet.deleteRows(2, last - max);
+  } catch (e) {
+    // Never let log housekeeping break the run that triggered it.
+  }
 }
 
 // Fetches the real article page so the summary is built from full text, not just the feed snippet.

@@ -40,7 +40,10 @@ function runAIFilter_() {
     const pending = [];
     for (let i = 0; i < data.length; i++) {
       const status = String(data[i][C.FILTER_STATUS - 1] || '');
-      if (status === 'Done' || status === 'Error' || status === 'Skipped') continue;
+      // 'Error' goes back into the queue (bumpErrorStatus_ caps it at three
+      // attempts). Leaving it out meant one transient network failure froze
+      // a row out of triage permanently, with nothing to say so.
+      if (status === 'Done' || status === 'Skipped' || status === 'Error x3') continue;
       pending.push({ rowNumber: i + 2, row: data[i] });
     }
     if (!pending.length) { log_('runAIFilter', 'Nothing pending.'); return; }
@@ -55,10 +58,12 @@ function runAIFilter_() {
         String(p.row[C.SOURCE - 1] || '')
       );
       if (reason) {
-        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
-          'reject', 'reject', '', '', 'Pre-filtered: ' + reason, ''
+        // relevance stays 'low', never 'reject': category is the only gate
+        // (see api_listTriage_), and a contradictory relevance is exactly
+        // what fixHistoricalRelevanceMismatchesNow had to clean up by hand.
+        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 7).setValues([[
+          'low', 'reject', '', '', 'Pre-filtered: ' + reason, '', 'Done'
         ]]);
-        sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Done');
         preRejected++;
       } else {
         toClassify.push(p);
@@ -83,10 +88,10 @@ function runAIFilter_() {
       const ownLink = normalizeUrl_(String(p.row[C.LINK - 1] || ''));
       const originalLink = norm ? seenTitles[norm] : '';
       if (originalLink && originalLink !== ownLink) {
-        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
-          'low', 'reject', '', '', 'Duplicate of an already-classified article this week.', originalLink
+        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 7).setValues([[
+          'low', 'reject', '', '', 'Duplicate of an already-classified article this week.',
+          originalLink, 'Done'
         ]]);
-        sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Done');
         duplicated++;
       } else {
         deduped.push(p);
@@ -95,34 +100,83 @@ function runAIFilter_() {
     if (duplicated) { SpreadsheetApp.flush(); log_('runAIFilter', `Deduped ${duplicated} near-identical title(s) without AI.`); }
     if (!deduped.length) { log_('runAIFilter', 'All remaining rows were duplicates. Done.'); return; }
 
-    // 3) Batch the rest through Gemini (10 articles per call).
+    // 3) Batch the rest through Gemini.
     const systemPrompt = buildFilterSystemPrompt_(getTipolisCountriesText_());
-    const BATCH_SIZE = 10;
-    const SPACING_MS = 6500;
-    const SAFE_MS = 5 * 60 * 1000;
+    const BATCH_SIZE = APP.LIMITS.FILTER_AI_BATCH_SIZE;
+    const SPACING_MS = APP.LIMITS.FILTER_AI_SPACING_MS;
+    const SAFE_MS = APP.LIMITS.FILTER_SAFE_MS;
     const startTime = Date.now();
     let classified = 0;
+    let minuteRetries = 0;
+
+    // Stop at a self-imposed request budget instead of discovering the real
+    // ceiling by taking a 429 in the middle of a batch.
+    const budget = geminiBudget_();
+    if (!budget.left) {
+      scheduleFilterContinuationAfterQuotaReset_();
+      log_('runAIFilter',
+        `Daily budget of ${budget.budget} Gemini request(s) already spent (${budget.used} used). ` +
+        `${deduped.length} row(s) stay Pending; continuation re-armed for after the quota reset.`);
+      return;
+    }
+    let requestsLeft = budget.left;
 
     for (let b = 0; b < deduped.length; b += BATCH_SIZE) {
       if (Date.now() - startTime > SAFE_MS) {
-        scheduleFilterContinuation_();
+        scheduleFilterContinuation_(60);
         log_('runAIFilter', `Time budget reached after ${classified} classified. Continuation scheduled.`);
         return;
       }
+      if (requestsLeft <= 0) {
+        scheduleFilterContinuationAfterQuotaReset_();
+        log_('runAIFilter',
+          `Daily request budget exhausted after ${classified} classified. ` +
+          `${deduped.length - b} row(s) stay Pending; continuation re-armed for after the quota reset.`);
+        return;
+      }
+
       const batch = deduped.slice(b, b + BATCH_SIZE);
       let out;
       try {
-        out = callGeminiJson_(systemPrompt, buildFilterBatchUserPrompt_(batch), FILTER_BATCH_SCHEMA_);
+        requestsLeft--;
+        out = callGeminiJson_(systemPrompt, buildFilterBatchUserPrompt_(batch),
+                              FILTER_BATCH_SCHEMA_, { thinkingBudget: 0 });
       } catch (err) {
         const msg = getErrorMessage_(err);
-        if (msg.indexOf('429') >= 0) {
-          // Daily quota reached: STOP. Leave rows Pending for the next daily run. Do NOT re-arm.
-          removeTriggersByHandler_('runDailyAIFilter_continuation');
-          log_('runAIFilter', `Gemini daily quota reached. Stopping. ${classified} classified; remaining stay Pending for tomorrow.`);
+        const quota = err && err.geminiQuota;
+
+        if (quota && quota.kind === 'PER_MINUTE') {
+          // A per-minute cap is not the end of the day. Wait the delay the
+          // API itself asked for and retry the same batch.
+          minuteRetries++;
+          if (minuteRetries > 3) {
+            scheduleFilterContinuation_(5 * 60);
+            log_('runAIFilter',
+              `Per-minute limit kept firing after ${classified} classified. Continuation in 5 min.`);
+            return;
+          }
+          const wait = Math.min(70, Math.max(20, quota.retryDelaySec || 30));
+          log_('runAIFilter', `429 per-minute. Waiting ${wait}s and retrying the same batch (try ${minuteRetries}).`);
+          Utilities.sleep(wait * 1000);
+          b -= BATCH_SIZE;   // redo this batch
+          continue;
+        }
+
+        if (quota) {
+          // Daily (or unrecognised) quota. Never delete the continuation:
+          // doing that is what turned a one-morning outage into a backlog
+          // that the next day's fresh rows only made bigger. Re-arm past
+          // the reset instead, and log what the API actually said.
+          scheduleFilterContinuationAfterQuotaReset_();
+          log_('runAIFilter',
+            `Gemini quota (${quota.kind}). ${classified} classified this run; ` +
+            `${deduped.length - b} row(s) stay Pending. Continuation re-armed. API said: ${quota.raw}`);
           return;
         }
+
         batch.forEach(p => {
-          sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Error');
+          sheet.getRange(p.rowNumber, C.FILTER_STATUS)
+            .setValue(bumpErrorStatus_(p.row[C.FILTER_STATUS - 1]));
           sheet.getRange(p.rowNumber, C.AI_REASON).setValue(truncate_(msg, 200));
         });
         log_('runAIFilter', `Batch error (non-quota): ${truncate_(msg, 200)}`);
@@ -133,30 +187,29 @@ function runAIFilter_() {
       const byId = {};
       results.forEach(r => { if (r && r.id != null) byId[Number(r.id)] = r; });
 
-      batch.forEach((p, idx) => {
+      const writes = batch.map((p, idx) => {
         const r = byId[idx + 1] || {};
         const category = String(r.category || 'industry');
         let relevance = String(r.relevance || 'low');
         // Defensive: `category` is the sole gate (see api_listTriage_). Never
         // let a stray "reject" relevance from the model hide a kept article.
         if (category !== 'reject' && relevance === 'reject') relevance = 'medium';
-        sheet.getRange(p.rowNumber, C.AI_RELEVANCE, 1, 6).setValues([[
-          relevance,
-          category,
-          String(r.country || ''),
-          String(r.region || ''),
-          String(r.reason || ''),
-          ''
-        ]]);
-        sheet.getRange(p.rowNumber, C.FILTER_STATUS).setValue('Done');
         classified++;
+        return {
+          rowNumber: p.rowNumber,
+          values: [relevance, category, String(r.country || ''),
+                   String(r.region || ''), String(r.reason || ''), '', 'Done']
+        };
       });
+      writeFilterBlock_(sheet, writes);
       SpreadsheetApp.flush();
       Utilities.sleep(SPACING_MS);
     }
 
     removeTriggersByHandler_('runDailyAIFilter_continuation');
-    log_('runAIFilter', `Completed. ${preRejected} pre-filtered, ${duplicated} deduped, ${classified} AI-classified.`);
+    log_('runAIFilter',
+      `Completed. ${preRejected} pre-filtered, ${duplicated} deduped, ${classified} AI-classified. ` +
+      `Gemini requests used today: ${geminiBudget_().used}/${budget.budget}.`);
   } finally {
     lock.releaseLock();
   }
@@ -191,10 +244,60 @@ function fixHistoricalRelevanceMismatchesNow() {
 
 function runDailyAIFilter_continuation() { runAIFilter_(); }
 
-function scheduleFilterContinuation_() {
+function scheduleFilterContinuation_(delaySeconds) {
   removeTriggersByHandler_('runDailyAIFilter_continuation');
   ScriptApp.newTrigger('runDailyAIFilter_continuation')
-    .timeBased().after(60 * 1000).create();
+    .timeBased().after(Math.max(60, delaySeconds || 60) * 1000).create();
+}
+
+/**
+ * Re-arms the continuation for shortly after the Gemini daily quota resets
+ * (midnight Pacific). The point is that hitting the daily cap must never
+ * leave the queue with nobody scheduled to come back for it.
+ */
+function scheduleFilterContinuationAfterQuotaReset_() {
+  removeTriggersByHandler_('runDailyAIFilter_continuation');
+  const tz = 'America/Los_Angeles';
+  const now = new Date();
+  // parseDate returns the absolute instant of midnight PT today; the next
+  // reset is 24h later. ScriptApp.at() takes an absolute Date, so no
+  // timezone conversion is needed beyond this.
+  const todayPt = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  const startOfTodayPt = Utilities.parseDate(todayPt + ' 00:00:00', tz, 'yyyy-MM-dd HH:mm:ss');
+  let next = new Date(startOfTodayPt.getTime() + (24 * 60 + 15) * 60 * 1000);
+  if (next.getTime() <= now.getTime() + 60 * 1000) {
+    next = new Date(now.getTime() + 60 * 60 * 1000);   // safety: at least an hour out
+  }
+  ScriptApp.newTrigger('runDailyAIFilter_continuation').timeBased().at(next).create();
+  log_('runAIFilter', `Continuation re-armed for ${formatDateTime_(next)} (after the quota reset).`);
+}
+
+/**
+ * Writes a whole batch's AI columns in as few calls as possible.
+ * AI_RELEVANCE(10) through FILTER_STATUS(16) are contiguous, and the rows
+ * of a batch almost always are too, so a batch that used to cost 20 range
+ * calls (two per row, plus a flush) now costs about one.
+ */
+function writeFilterBlock_(sheet, writes) {
+  if (!writes || !writes.length) return;
+  const C = APP.COL.RESULTS;
+  const width = C.FILTER_STATUS - C.AI_RELEVANCE + 1;
+  const sorted = writes.slice().sort((a, b) => a.rowNumber - b.rowNumber);
+  let i = 0;
+  while (i < sorted.length) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1].rowNumber === sorted[j].rowNumber + 1) j++;
+    const block = sorted.slice(i, j + 1).map(w => w.values);
+    sheet.getRange(sorted[i].rowNumber, C.AI_RELEVANCE, block.length, width).setValues(block);
+    i = j + 1;
+  }
+}
+
+/** 'Error' -> 'Error x2' -> 'Error x3' (final). Bounds the retry loop. */
+function bumpErrorStatus_(current) {
+  const m = String(current || '').match(/^Error(?:\s*x(\d+))?$/i);
+  const next = m ? Number(m[1] || 1) + 1 : 1;
+  return next >= 3 ? 'Error x3' : 'Error x' + next;
 }
 
 /* ---------- Prompt building ---------- */

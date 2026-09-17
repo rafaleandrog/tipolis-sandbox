@@ -18,13 +18,13 @@
     <header class="t-hero">
       <span class="t-hero__overline">Step 1 · Triage</span>
       <h1 class="t-hero__title">Approve <span>or reject</span> the queue.</h1>
-      <p class="t-hero__lead">Each card is one classified article. Approve to send it to the summary editor; reject to drop it. Approving is instant — the AI bullets are generated separately, in a batch, from the Summaries screen. By default the queue is limited to the current report window (previous Monday 00:00 → last Sunday 23:59).</p>
+      <p class="t-hero__lead">Each card is one classified article. Approve to send it to the summary editor; reject to drop it. Approving is instant — the AI bullets are generated separately, in a batch, from the Summaries screen. The queue shows everything the AI has classified and nobody has rejected yet, regardless of publish date.</p>
     </header>
 
     <section>
       <span class="t-eyebrow">Filter</span>
       <h2 class="t-h2 t-h2--sm">Pending</h2>
-      <p class="t-lead">Focus on one category at a time. Rejected items and out-of-window items are hidden unless you toggle them on.</p>
+      <p class="t-lead">Focus on one category at a time. Rejected items are hidden unless you toggle them on.</p>
 
       <div class="pm-filter-row">
         <span class="pm-filter-row__label">Category</span>
@@ -33,10 +33,6 @@
         <button class="t-pill" data-filter="industry">Industry</button>
         <span class="pm-filter-row__label" style="margin-left:24px">View</span>
         <button class="t-pill" data-toggle-rejected aria-pressed="false">Show rejected</button>
-        <button class="t-pill" data-toggle-alldates aria-pressed="false"
-          title="By default the queue is limited to the current report window. Toggle on to see every classified row regardless of publish date.">
-          All dates
-        </button>
         <span class="pm-toolbar__spacer"></span>
         <button class="pm-btn pm-btn--ghost" data-action="refresh">Refresh</button>
       </div>
@@ -51,6 +47,8 @@
         <div class="pm-manual-add__error" data-manual-error hidden></div>
       </form>
 
+      <div class="pm-pipeline" data-pipeline hidden></div>
+
       <div class="pm-triage-counter" data-counter>
         <span><strong data-count-pending>0</strong> pending</span>
         <span><strong data-count-approved>0</strong> approved this session</span>
@@ -61,7 +59,7 @@
 
       <div data-error class="pm-error" hidden></div>
       <div data-state="loading" class="pm-loading">Loading triage queue</div>
-      <div data-empty class="pm-empty" hidden>No items in this window. Try "All dates" or run a search from Config.</div>
+      <div data-empty class="pm-empty" hidden>Nothing waiting for triage. Run a search from Config, or check the line above for articles still queued for the AI.</div>
       <div data-list class="pm-triage-list"></div>
     </section>
   </main>
@@ -83,11 +81,12 @@
         rejected: document.querySelector('[data-count-rejected]')
       };
 
+      const pipelineEl = document.querySelector('[data-pipeline]');
+
       const state = {
         items: [],
         filter: 'both',
         showRejected: false,
-        allDates: false,
         sessionApproved: 0,
         sessionRejected: 0
       };
@@ -180,6 +179,31 @@
         }
       }
 
+      // Shows what the queue alone cannot: rows still waiting on the AI and
+      // how much of today's Gemini request budget is left. A classifier that
+      // stalled on a quota used to be invisible here — the queue simply
+      // stopped growing, with nothing on screen to say why.
+      async function loadPipeline() {
+        try {
+          const st = await PM.apiGet('/status');
+          if (!st || !st.counts) { pipelineEl.hidden = true; return; }
+          const c = st.counts;
+          const g = st.gemini || {};
+          const bits = [];
+          if (c.pending) bits.push(`<strong>${c.pending}</strong> waiting for the AI`);
+          if (c.error) bits.push(`<strong>${c.error}</strong> failed classification`);
+          if (c.skipped) bits.push(`<strong>${c.skipped}</strong> parked off-topic`);
+          if (g.budget) bits.push(`Gemini today: <strong>${g.used}</strong>/${g.budget} requests`);
+          if (!bits.length) { pipelineEl.hidden = true; return; }
+          pipelineEl.innerHTML = bits.join(' · ');
+          pipelineEl.classList.toggle('pm-pipeline--warn', !!c.pending || !!c.error);
+          pipelineEl.hidden = false;
+        } catch (err) {
+          // The banner is informational; never let it break the queue.
+          pipelineEl.hidden = true;
+        }
+      }
+
       async function load() {
         loading.hidden = false;
         emptyEl.hidden = true;
@@ -187,11 +211,11 @@
         try {
           const params = {};
           if (state.showRejected) params.showRejected = 'true';
-          if (state.allDates) params.allDates = 'true';
           const data = await PM.apiGet('/triage', Object.keys(params).length ? params : null);
           state.items = data || [];
           loading.hidden = true;
           render();
+          loadPipeline();
         } catch (err) {
           loading.hidden = true;
           if (err.name !== 'Unauthorized') showError(err.message);
@@ -211,14 +235,6 @@
         state.showRejected = !state.showRejected;
         rejBtn.setAttribute('aria-pressed', String(state.showRejected));
         rejBtn.classList.toggle('is-active', state.showRejected);
-        load();
-      });
-
-      const allDatesBtn = document.querySelector('[data-toggle-alldates]');
-      allDatesBtn.addEventListener('click', () => {
-        state.allDates = !state.allDates;
-        allDatesBtn.setAttribute('aria-pressed', String(state.allDates));
-        allDatesBtn.classList.toggle('is-active', state.allDates);
         load();
       });
 

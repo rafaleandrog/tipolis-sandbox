@@ -59,9 +59,21 @@ header, and seeds the priority-country list.
 
 - [ ] Reload the Google Sheet so the new "Tipolis" menu appears
 - [ ] Click **Tipolis → Create / repair project sheets**
-- [ ] Verify the 7 tabs were created: `search_terms`, `tipolis_countries`,
+- [ ] Verify the 8 tabs were created: `search_terms`, `tipolis_countries`,
       `search_results`, `approved_news`, `approved_history`,
-      `report_settings`, `logs`
+      `report_settings`, `logs`, `topic_keywords`
+- [ ] Check `topic_keywords` came seeded: ~123 rows with `mode=block` and
+      the checkbox ticked, plus ~51 rows with `mode=require` left unticked.
+      This is the thematic gate. `block` keywords park local sport,
+      obituaries, weather and accidents before they can cost a Gemini call;
+      `require` keywords are far sharper and are off on purpose, because
+      measurement showed they also drop about 45% of the real news from
+      priority countries (see `apps-script/README.md`). Edits take effect
+      within 10 minutes — the list is cached. An empty sheet turns the gate
+      off entirely.
+- [ ] Re-running **Create / repair project sheets** on an existing
+      spreadsheet also backfills any `report_settings` key added since it
+      was first created — run it after pulling new code.
 
 ## Phase 3 — Drive + Gemini + secrets in `report_settings`
 
@@ -84,10 +96,20 @@ others depend on Drive/AI Studio steps.
   - [ ] `report_template_doc_id` = the Doc ID (the converted Google Doc, not the .docx)
   - [ ] `frontend_bearer_token` = `a9FvK7xP2mQ8rN4tZ1wL6cY3hJ9sD5eB7uR2kM8pX4nQ1vT6z`
 
+### Cost-control keys (seeded with working defaults — tune, don't leave blank)
+
+| key | default | what it does |
+|---|---|---|
+| `gemini_daily_request_budget` | `200` | The classifier stops at this many Gemini requests per day instead of discovering the real ceiling by taking a 429 mid-batch. |
+| `max_rows_per_search_run` | `250` | Cap on AI-bound rows a single daily search may write. Terms that did not fit start the next run. |
+| `topic_gate_mode` | `skip` | `skip` parks off-topic articles as `FilterStatus="Skipped"` (auditable, no AI cost); `drop` stops storing them. Start on `skip`, read what it parked for a week, then switch. |
+| `gnews_fallback_enabled` | `false` | Call the GNews API when Google News RSS returns nothing. An empty RSS almost always means "no news", so this mostly spends a limited quota to confirm a zero. |
+| `daily_filter_auto_run` | `true` | Toggle for the daily AI classification trigger. |
+
 ## Phase 4 — Activate the pipeline
 
 - [ ] In the Sheet menu: **Tipolis → Install all triggers** (daily 06:00
-      search; daily 07:00 AI filter)
+      search; 07:00 AI classification; 13:00 catch-up pass)
 - [ ] In the Apps Script editor: **Deploy → Manage deployments → pencil →
       Version: New version → Deploy**. The Web App URL stays the same;
       this just makes the new code live.

@@ -141,6 +141,25 @@
 }
 
 /* Triage card */
+/* Pipeline banner: rows still queued for the AI + today's Gemini budget.
+   Sits above the session counters because it explains why the queue below
+   may be shorter than the day's search suggests. */
+.pm-pipeline {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border-card);
+  border-left: 3px solid var(--color-text-secondary);
+  border-radius: var(--radius-1);
+  background: var(--color-bg-card);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.pm-pipeline strong { color: var(--color-text-primary); font-weight: 700; }
+.pm-pipeline--warn { border-left-color: var(--accent-bonds, var(--accent)); }
+
 .pm-triage-counter {
   display: flex;
   gap: 18px;

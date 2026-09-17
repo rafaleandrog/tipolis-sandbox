@@ -45,44 +45,98 @@ function runSearchCore_(mode) {
 
     const knownUrls = getKnownUrls_(resultsSheet);  // results + history
     const fetchedAt = formatDateTime_(new Date());
-    let totalWritten = 0;
+    const topicVocab = getTopicKeywords_();
+    const gateMode = String(getSetting_('topic_gate_mode') || 'skip').trim().toLowerCase();
+    const maxRows = toPositiveInt_(
+      getSetting_('max_rows_per_search_run'), APP.LIMITS.DEFAULT_MAX_ROWS_PER_SEARCH_RUN);
 
-    log_('runSearchCore', `Started (${mode}). Active terms: ${rules.length}.`);
+    // One read, at the start. Before this the row cursor came from
+    // getNextEmptyRowInCols_ once per term — and that helper scans the
+    // whole sheet (maxRows x 16 columns), so 51 terms meant 51 full-sheet
+    // reads inside a 6-minute execution budget.
+    let writeCursor = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
+    let totalWritten = 0, totalOffTopic = 0, totalRows = 0;
+    // maxRows bounds the AI-bound rows, which is what costs money. Parked
+    // off-topic rows are free but not weightless — they still take sheet
+    // rows and write time — so they get a looser ceiling of their own.
+    const maxTotalRows = maxRows * 4;
 
-    for (const rule of rules) {
+    // Round-robin start: resume where the previous run stopped, so the row
+    // cap never starves the same tail terms day after day.
+    const props = PropertiesService.getScriptProperties();
+    const startAt = rules.length ? (Number(props.getProperty(APP.PROPERTIES.TERM_CURSOR) || 0) % rules.length) : 0;
+    const ordered = rules.slice(startAt).concat(rules.slice(0, startAt));
+    let processed = 0;
+
+    log_('runSearchCore',
+      `Started (${mode}). Active terms: ${rules.length}, starting at #${startAt + 1}. ` +
+      `Row cap: ${maxRows}. Topic gate: ${topicVocab.block.length + topicVocab.require.length} keyword(s), ` +
+      `${topicVocab.block.length} block / ${topicVocab.require.length} require, mode ${gateMode}.`);
+
+    for (const rule of ordered) {
+      if (totalWritten >= maxRows || totalRows >= maxTotalRows) {
+        const why = totalWritten >= maxRows
+          ? `Row cap of ${maxRows} AI-bound row(s) reached`
+          : `Hard cap of ${maxTotalRows} written row(s) reached`;
+        log_('runSearchCore', `${why}. ${ordered.length - processed} term(s) will start the next run.`);
+        break;
+      }
+      processed++;
       try {
         const items = fetchNewsForRule_(rule);
         const rowsForTerm = [];
-        let added = 0, dup = 0, invalid = 0;
+        let added = 0, dup = 0, invalid = 0, offTopic = 0;
         for (const item of items) {
           const link = normalizeUrl_(item.link);
           if (!link) { invalid++; continue; }
           if (knownUrls.has(link)) { dup++; continue; }
           if (!passesLocalMatchRule_(rule, item)) { invalid++; continue; }
-          rowsForTerm.push(buildResultRow_(rule.term, item, fetchedAt));
+
+          const row = buildResultRow_(rule.term, item, fetchedAt);
+          const gateVerdict = topicGateVerdict_(item, topicVocab);
+          if (gateVerdict) {
+            offTopic++;
+            if (gateMode === 'drop') { knownUrls.add(link); continue; }
+            // Default 'skip' mode: the article is not lost, it is parked.
+            // It costs no AI call and stays out of triage, but it is still
+            // in the sheet — which is the only way to audit what the gate
+            // throws away and tune topic_keywords against real data. The
+            // reason names the exact keyword, so a bad one is easy to find.
+            row[APP.COL.RESULTS.FILTER_STATUS - 1] = 'Skipped';
+            row[APP.COL.RESULTS.AI_REASON - 1] = 'Topic gate (' + gateVerdict + ').';
+          } else {
+            added++;
+          }
+          rowsForTerm.push(row);
           knownUrls.add(link);
-          added++;
         }
         // Write this term's rows now, not at the end of the whole loop —
         // see the file header comment for why.
         if (rowsForTerm.length) {
-          const startRow = getNextEmptyRowInCols_(resultsSheet, 1, APP.HEADERS.RESULTS.length);
-          resultsSheet.getRange(startRow, 1, rowsForTerm.length, APP.HEADERS.RESULTS.length)
+          resultsSheet.getRange(writeCursor, 1, rowsForTerm.length, APP.HEADERS.RESULTS.length)
             .setValues(rowsForTerm);
-          resultsSheet.getRange(startRow, 1, rowsForTerm.length, 1).insertCheckboxes();
+          resultsSheet.getRange(writeCursor, 1, rowsForTerm.length, 1).insertCheckboxes();
           SpreadsheetApp.flush();
-          totalWritten += rowsForTerm.length;
+          writeCursor += rowsForTerm.length;
+          totalRows += rowsForTerm.length;
         }
+        totalWritten += added;   // the cap counts rows that will cost an AI call
+        totalOffTopic += offTopic;
         log_('runSearchCore',
-          `Term "${rule.term}": ${items.length} fetched, ${added} new, ${dup} dup, ${invalid} filtered.`);
+          `Term "${rule.term}": ${items.length} fetched, ${added} new, ${dup} dup, ` +
+          `${invalid} filtered, ${offTopic} off-topic.`);
       } catch (err) {
         log_('runSearchCore', `Error for "${rule.term}": ${getErrorMessage_(err)}`);
       }
     }
 
-    log_('runSearchCore', totalWritten
-      ? `${totalWritten} row(s) written across ${rules.length} term(s).`
+    props.setProperty(APP.PROPERTIES.TERM_CURSOR,
+      String(rules.length ? (startAt + processed) % rules.length : 0));
+
+    log_('runSearchCore', totalWritten || totalOffTopic
+      ? `${totalWritten} row(s) queued for AI, ${totalOffTopic} parked as off-topic, across ${processed} term(s).`
       : 'No new rows.');
+    rotateLogs_();
   } finally {
     lock.releaseLock();
   }
@@ -216,7 +270,11 @@ function fetchNewsForRule_(rule) {
   const rssItems = fetchFromGoogleNewsRss_(rule);
   let items = dedupeByTitle_(rssItems).slice(0, rule.maxResults);
 
-  if (!items.length) {
+  // An empty RSS response almost always means "no news for this term in
+  // this window", not "the source failed" — so the GNews fallback mostly
+  // spends a limited third-party quota to confirm a zero. Off by default;
+  // flip gnews_fallback_enabled in report_settings to bring it back.
+  if (!items.length && isSettingTrue_('gnews_fallback_enabled', false)) {
     log_('fetchNewsForRule', `RSS empty for "${rule.term}". Trying GNews API fallback.`);
     items = dedupeByTitle_(fetchFromGNewsApi_(rule)).slice(0, rule.maxResults);
   }
@@ -232,6 +290,71 @@ function fetchNewsForRule_(rule) {
     }
     return item;
   });
+}
+
+/* ---------- Thematic gate ----------
+ * Runs AFTER the fetch and BEFORE the row is written. Search terms stay
+ * broad on purpose ("Uruguay", "freeport", "SEZ"); this gate is what stops
+ * the general news those terms drag in — local sport, obituaries, weather,
+ * traffic accidents — from consuming a Gemini classification.
+ *
+ * Two vocabularies, both in the topic_keywords sheet:
+ *   block   — matching any of these parks the article. Measured on 721 real
+ *             fetched articles: parks 31 percent of what the AI rejected and
+ *             none of what it kept. This is the one that ships enabled.
+ *   require — if any are enabled, an article must match one of them. Much
+ *             sharper and measurably too sharp for broad country terms (it
+ *             parked 45 percent of the articles the AI kept), so it ships
+ *             disabled and is meant to be switched on per experiment.
+ *
+ * An empty sheet, or one with everything disabled, turns the gate off.
+ */
+function getTopicKeywords_() {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('TOPIC_KEYWORDS_V2');
+  if (hit) { try { return JSON.parse(hit); } catch (e) { /* fall through */ } }
+
+  const empty = { block: [], require: [] };
+  const sheet = sheet_(APP.SHEETS.TOPIC_KEYWORDS);
+  if (!sheet) return empty;
+  const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.TOPIC_KEYWORDS.length);
+  if (last < 2) return empty;
+
+  const vocab = { block: [], require: [] };
+  sheet.getRange(2, 1, last - 1, 3).getValues().forEach(r => {
+    const keyword = normalizeForGate_(r[0]);
+    if (!keyword) return;
+    if (!toBoolean_(r[2], true)) return;
+    const mode = String(r[1] || 'block').trim().toLowerCase();
+    if (mode === 'require') vocab.require.push(keyword);
+    else vocab.block.push(keyword);
+  });
+  cache.put('TOPIC_KEYWORDS_V2', JSON.stringify(vocab), 600);   // re-read every 10 min
+  return vocab;
+}
+
+// Accent-insensitive so "zona economica especial" in the sheet matches
+// "zona econômica especial" in a Brazilian headline, and vice versa.
+function normalizeForGate_(text) {
+  return String(text || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+// Returns '' when the article passes, or the keyword that parked it.
+function topicGateVerdict_(item, vocab) {
+  if (!vocab || (!vocab.block.length && !vocab.require.length)) return '';
+  const hay = normalizeForGate_([item.title, item.description, item.source].join(' '));
+  if (!hay) return '';
+
+  for (let i = 0; i < vocab.block.length; i++) {
+    if (hay.indexOf(vocab.block[i]) >= 0) return 'blocked: ' + vocab.block[i];
+  }
+  if (!vocab.require.length) return '';
+  for (let i = 0; i < vocab.require.length; i++) {
+    if (hay.indexOf(vocab.require[i]) >= 0) return '';
+  }
+  return 'no required topic keyword';
 }
 
 // Removes near-identical headlines (same wire story, different outlets)

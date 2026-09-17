@@ -45,6 +45,8 @@ function handleRequest_(e, method) {
       case 'POST /report/generate': return jsonOut_({ ok: true, data: api_generateReport_() });
       case 'POST /report/archive':  return jsonOut_({ ok: true, data: api_archive_(body) });
 
+      case 'GET /status':           return jsonOut_({ ok: true, data: api_status_() });
+
       case 'GET /history':          return jsonOut_({ ok: true, data: api_history_(e.parameter) });
       case 'GET /history/countries':return jsonOut_({ ok: true, data: api_historyCountries_() });
 
@@ -176,14 +178,51 @@ function api_saveCountries_(body) {
 
 /* ---------- Triage ---------- */
 
+/**
+ * Pipeline health for the frontend banner: how much is waiting on the AI,
+ * how much was parked off-topic, and how much of today's Gemini request
+ * budget is gone. Without this the only symptom of a stalled classifier is
+ * a triage queue that quietly stops growing.
+ */
+function api_status_() {
+  const sheet = sheet_(APP.SHEETS.RESULTS);
+  const C = APP.COL.RESULTS;
+  const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
+  const counts = { total: 0, queue: 0, pending: 0, skipped: 0, error: 0, rejected: 0, approved: 0 };
+
+  if (last >= 2) {
+    const width = C.FILTER_STATUS - C.AI_CATEGORY + 1;
+    const cats = sheet.getRange(2, C.AI_CATEGORY, last - 1, width).getValues();
+    const approvedFlags = sheet.getRange(2, C.APPROVED, last - 1, 1).getValues();
+    cats.forEach((r, i) => {
+      counts.total++;
+      const category = String(r[0] || '');
+      const status = String(r[width - 1] || '');
+      if (approvedFlags[i][0] === true) { counts.approved++; return; }
+      if (status === 'Done') {
+        if (category === 'reject') counts.rejected++; else counts.queue++;
+      } else if (status === 'Skipped') counts.skipped++;
+      else if (status.indexOf('Error') === 0) counts.error++;
+      else counts.pending++;
+    });
+  }
+  return { counts: counts, gemini: geminiBudget_() };
+}
+
 function api_listTriage_(params) {
   const sheet = sheet_(APP.SHEETS.RESULTS);
   const C = APP.COL.RESULTS;
   const last = getLastDataRowInCols_(sheet, 1, APP.HEADERS.RESULTS.length);
   if (last < 2) return [];
   const showRejected = params && params.showRejected === 'true';
-  const allDates = params && params.allDates === 'true';
-  const win = getReportWindow_();
+  // No date filter. The triage queue is "everything not rejected yet" —
+  // by you or by the AI. It used to be limited to getReportWindow_(), which
+  // is the *previous* Monday-to-Sunday; since the daily search only looks
+  // back a couple of days, almost nothing it fetched could ever fall inside
+  // that window, so freshly classified articles were invisible by default.
+  // getReportWindow_() is still the right rule for the weekly report and
+  // the archive (06_Report.gs / 07_Archive.gs) — just not for this queue.
+  // `allDates` is accepted and ignored, so an older frontend keeps working.
   const data = sheet.getRange(2, 1, last - 1, APP.HEADERS.RESULTS.length).getValues();
   const out = [];
   data.forEach((r, i) => {
@@ -197,10 +236,6 @@ function api_listTriage_(params) {
     // 04_AIFilter.gs for the classifier-side half of this fix.
     if (!showRejected && category === 'reject') return;
     if (r[C.APPROVED - 1] === true) return;
-    if (!allDates) {
-      const pub = parseDateLoose_(r[C.PUBLISHED_AT - 1]);
-      if (!pub || pub < win.start || pub > win.end) return;   // report-window only
-    }
     out.push({
       row: i + 2,
       term: r[C.TERM - 1], publishedAt: r[C.PUBLISHED_AT - 1], source: r[C.SOURCE - 1],
@@ -280,7 +315,8 @@ function api_addManualLink_(body) {
       reason = 'Manual entry — added by you, always shown regardless of AI classification.';
   try {
     const systemPrompt = buildFilterSystemPrompt_(getTipolisCountriesText_());
-    const out = callGeminiJson_(systemPrompt, buildFilterUserPrompt_(row), FILTER_SCHEMA_);
+    const out = callGeminiJson_(systemPrompt, buildFilterUserPrompt_(row), FILTER_SCHEMA_,
+                                { thinkingBudget: 0 });
     relevance = String(out.relevance || 'medium');
     category = String(out.category || 'industry');
     if (category === 'reject') category = 'industry';   // manual entries are never auto-rejected
