@@ -151,7 +151,7 @@
         const cs = PM.el('input', { type: 'checkbox' }); cs.checked = t.case_sensitive === true;
         const lang = PM.el('input', { type: 'text', value: t.language || 'en', placeholder: 'en', maxlength: '5' });
         const country = PM.el('input', { type: 'text', value: t.country || '', placeholder: 'US, BR, …', maxlength: '4' });
-        const maxR = PM.el('input', { type: 'number', min: '1', max: '100', value: String(t.max_results || 20) });
+        const maxR = PM.el('input', { type: 'number', min: '1', max: '100', value: String(t.max_results || 10), title: 'Clamped server-side to report_settings max_results_cap (default 10)' });
         const remove = PM.el('button', { class: 'pm-btn pm-btn--danger pm-btn--icon', onClick: () => tr.remove() }, ['Delete']);
 
         tr.appendChild(cell('Term', term));
@@ -172,7 +172,7 @@
           case_sensitive: cs.checked,
           language: lang.value.trim() || 'en',
           country: country.value.trim().toUpperCase(),
-          max_results: Number(maxR.value) || 20
+          max_results: Number(maxR.value) || 10
         });
         return tr;
       }

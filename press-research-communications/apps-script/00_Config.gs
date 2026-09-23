@@ -71,7 +71,7 @@ const APP = {
     case_sensitive: false,
     language: 'en',
     country: '',
-    max_results: 40,          // was 20 — raised so RSS-primary has room to work with
+    max_results: 10,          // GNews free tier returns at most 10 per request; also keeps daily volume inside the Gemini quota
     gemini_model: 'gemini-2.5-flash',
     daily_search_hour: 6,    // daily search runs ~06:00
     weekly_filter_hour: 7,   // AI classification runs ~07:00 (margin after search)
@@ -105,7 +105,12 @@ const APP = {
     FILTER_SAFE_MS: 5 * 60 * 1000,   // stop and continue before the 6-min cap
 
     // Fallbacks for the report_settings keys of the same name.
-    DEFAULT_GEMINI_DAILY_BUDGET: 200,
+    // The Gemini free tier for gemini-2.5-flash measured ~20 requests/day
+    // (logs 19-23 Sep 2026: 429 after 19-24 calls). The budget must sit at
+    // or below that, and part of it is reserved for summaries.
+    DEFAULT_GEMINI_DAILY_BUDGET: 20,
+    DEFAULT_GEMINI_SUMMARY_RESERVE: 6,
+    DEFAULT_MAX_RESULTS_CAP: 10,
     DEFAULT_MAX_ROWS_PER_SEARCH_RUN: 250,
     MAX_LOG_ROWS: 4000
   },
@@ -152,14 +157,22 @@ const SETTINGS_SEED = [
   ['weekly_filter_auto_run', 'true', 'Toggle the weekly AI filter trigger'],
   ['daily_filter_auto_run', 'true', 'Toggle the daily AI classification trigger'],
   ['frontend_bearer_token', '', 'Random 32+ char token the frontend must send — PASTE HERE'],
-  ['gemini_daily_request_budget', '200',
-    'Max Gemini requests per day. The filter stops cleanly at this number instead of discovering the quota by taking a 429.'],
+  ['gemini_daily_request_budget', '20',
+    'Max Gemini requests per day (free tier is ~20). The filter stops cleanly at this number instead of discovering the quota by taking a 429.'],
+  ['gemini_summary_reserve', '6',
+    'Gemini requests per day the AI filter leaves untouched so "Generate pending summaries" still works the same day.'],
+  ['search_source', 'gnews',
+    'gnews = GNews API first (real publisher links + description, as before 16 Sep 2026), Google News RSS only when GNews returns nothing. rss = RSS first.'],
+  ['max_results_cap', '10',
+    'Hard ceiling applied to every search_terms max_results value. Keeps the daily volume inside the Gemini quota.'],
   ['max_rows_per_search_run', '250',
     'Max rows a single daily search may write. Terms left over start first on the next run.'],
   ['topic_gate_mode', 'skip',
     'skip = off-topic articles are stored with FilterStatus="Skipped" (auditable, no AI cost); drop = not stored at all.'],
   ['gnews_fallback_enabled', 'false',
-    'Call the GNews API when Google News RSS returns nothing. Empty RSS usually means "no news", so this is off by default to save the GNews quota.']
+    'Only used when search_source = rss: call the GNews API when Google News RSS returns nothing.'],
+  ['rss_fallback_enabled', 'true',
+    'Only used when search_source = gnews: call Google News RSS when GNews returns nothing for a term.']
 ];
 
 // Seed vocabulary for the topic_keywords sheet — the local gate that decides

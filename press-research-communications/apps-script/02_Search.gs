@@ -1,9 +1,13 @@
 /**************************************************************
  * TIPOLIS PRESS MONITOR — 02_Search.gs
- * Daily search. Google News RSS is the PRIMARY source (same engine
- * as a manual news.google.com search — diverse countries/sources,
- * not dominated by one prolific outlet); GNews API is a FALLBACK
- * used only when RSS returns nothing. Near-duplicate titles are
+ * Daily search. The GNews API is the PRIMARY source again (setting
+ * search_source = gnews): it returns the real publisher URL plus a
+ * description and a content snippet, which is what the AI filter and
+ * the summaries need. Between 16 and 23 Sep 2026 Google News RSS was
+ * primary; its links are news.google.com redirects with only the
+ * headline as description, so Gemini classified blind and volume went
+ * from ~45 to 250-530 rows/day. RSS is now the FALLBACK, used only
+ * when GNews returns nothing for a term. Near-duplicate titles are
  * deduped before the max_results cut. Appends new rows to
  * search_results. Dedups by URL against search_results (current
  * accumulator) and approved_history.
@@ -236,6 +240,8 @@ function getActiveTermRules_(sheet) {
   const lastRow = getLastDataRowInCols_(sheet, 1, APP.HEADERS.TERMS.length);
   if (lastRow < 2) return [];
   const data = sheet.getRange(2, 1, lastRow - 1, APP.HEADERS.TERMS.length).getValues();
+  // Hard ceiling on every term's max_results (report_settings: max_results_cap).
+  const cap = toPositiveInt_(getSetting_('max_results_cap'), APP.LIMITS.DEFAULT_MAX_RESULTS_CAP);
   const rules = [];
   for (let i = 0; i < data.length; i++) {
     const row = data[i];
@@ -250,39 +256,50 @@ function getActiveTermRules_(sheet) {
       caseSensitive: toBoolean_(row[4], APP.DEFAULTS.case_sensitive),
       language: normalizeLanguage_(row[5]),
       country: normalizeCountry_(row[6]),
-      maxResults: Math.min(100, Math.max(1, toPositiveInt_(row[7], APP.DEFAULTS.max_results)))
+      maxResults: Math.min(cap, 100, Math.max(1, toPositiveInt_(row[7], APP.DEFAULTS.max_results)))
     });
   }
   return rules;
 }
 
-/* ---------- Fetching (RSS primary, GNews fallback) ---------- */
+/* ---------- Fetching (GNews primary, RSS fallback) ---------- */
 
 /**
- * Google News RSS is the same engine behind a manual news.google.com
- * search — it naturally surfaces diverse countries/sources instead of
- * being dominated by whichever outlet republishes the most. It's used
- * first; GNews API only kicks in if RSS comes back empty for a term.
+ * search_source = gnews (default): GNews API first. It returns the real
+ * publisher URL, a description and a content snippet, so the AI filter
+ * sees what the article is about and the summary can fetch the full text.
+ * Google News RSS is used only when GNews returns nothing for the term
+ * (no news in the window, or the GNews daily quota was hit — the log says
+ * which), and only if rss_fallback_enabled is not "false".
+ *
+ * search_source = rss: the previous behaviour (RSS first, GNews fallback
+ * only when gnews_fallback_enabled = true).
+ *
  * Near-duplicate titles (the same wire story in 5 outlets) are removed
  * BEFORE the max_results cut, so real diversity survives the cap.
  */
 function fetchNewsForRule_(rule) {
-  const rssItems = fetchFromGoogleNewsRss_(rule);
-  let items = dedupeByTitle_(rssItems).slice(0, rule.maxResults);
+  const source = String(getSetting_('search_source') || 'gnews').trim().toLowerCase();
+  let items;
 
-  // An empty RSS response almost always means "no news for this term in
-  // this window", not "the source failed" — so the GNews fallback mostly
-  // spends a limited third-party quota to confirm a zero. Off by default;
-  // flip gnews_fallback_enabled in report_settings to bring it back.
-  if (!items.length && isSettingTrue_('gnews_fallback_enabled', false)) {
-    log_('fetchNewsForRule', `RSS empty for "${rule.term}". Trying GNews API fallback.`);
+  if (source === 'rss') {
+    items = dedupeByTitle_(fetchFromGoogleNewsRss_(rule)).slice(0, rule.maxResults);
+    if (!items.length && isSettingTrue_('gnews_fallback_enabled', false)) {
+      log_('fetchNewsForRule', `RSS empty for "${rule.term}". Trying GNews API fallback.`);
+      items = dedupeByTitle_(fetchFromGNewsApi_(rule)).slice(0, rule.maxResults);
+    }
+  } else {
     items = dedupeByTitle_(fetchFromGNewsApi_(rule)).slice(0, rule.maxResults);
+    if (!items.length && isSettingTrue_('rss_fallback_enabled', true)) {
+      log_('fetchNewsForRule', `GNews empty for "${rule.term}". Trying Google News RSS fallback.`);
+      items = dedupeByTitle_(fetchFromGoogleNewsRss_(rule)).slice(0, rule.maxResults);
+    }
   }
 
   // Cheap, local (no network) resolution of old-format Google News redirect
-  // links to the real publisher URL. New-format links that need a network
-  // call are resolved later, only for approved items (see 05_AISummary.gs),
-  // to keep this bulk search step fast and inside the execution time limit.
+  // links to the real publisher URL (RSS fallback rows only). New-format
+  // links that need a network call are resolved later, only for approved
+  // items (see 05_AISummary.gs), to keep this bulk step inside the time limit.
   return items.map(item => {
     if (item.link && item.link.indexOf('news.google.com') >= 0) {
       const cheap = resolveArticleUrl_(item.link, /*allowNetwork*/ false);

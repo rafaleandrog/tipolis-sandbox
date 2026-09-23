@@ -80,7 +80,7 @@ same file risks overwriting work.
 |---|---|
 | `00_Config.gs` | Sheet names, column maps, defaults, seeds |
 | `01_Menu_Setup.gs` | Spreadsheet menu + project bootstrap |
-| `02_Search.gs` | Daily Google News / GNews search |
+| `02_Search.gs` | Daily search: GNews API first, Google News RSS fallback |
 | `03_Gemini.gs` | Gemini REST wrapper + quota accounting |
 | `04_AIFilter.gs` | Relevance + category classifier (quota-aware, resumable) |
 | `05_AISummary.gs` | Per-article bullet generation |
@@ -106,7 +106,16 @@ to keep the number of classification calls proportional to the number of
 articles actually worth reading.
 
 1. **Search terms stay broad** (`search_terms`): `Uruguay`, `freeport`,
-   `SEZ`. Narrowing them at the query would cost recall.
+   `SEZ`. Narrowing them at the query would cost recall. Every term's
+   `max_results` is clamped to `max_results_cap` (10), and the source is
+   chosen by `search_source`: `gnews` (default) asks the GNews API first
+   and falls back to Google News RSS only when GNews returns nothing
+   (`rss_fallback_enabled`). GNews gives the real publisher URL, a
+   description and a content snippet; RSS gives a `news.google.com`
+   redirect and only the headline. With RSS as primary (16–23 Sep 2026)
+   Gemini classified blind and volume went from ~45 to 250–530 rows a day.
+   `search_source = rss` restores that mode, with `gnews_fallback_enabled`
+   as its fallback toggle.
 2. **Thematic gate** (`topic_keywords`, `topicGateVerdict_` in `02_Search.gs`):
    runs after the fetch and before the row is written. Two vocabularies in
    one sheet, chosen by the `mode` column:
@@ -150,14 +159,26 @@ articles actually worth reading.
 3. **Row cap** (`max_rows_per_search_run`): a single search writes at most
    this many AI-bound rows. Terms that did not fit start the next run, so the
    cap rotates instead of always starving the tail of the list.
-4. **Blocklist** (`prefilterReject_`): literal noise strings, rejected
-   without an AI call.
+4. **Blocklist** (`prefilterReject_`): literal noise strings (including
+   homonyms like Freeport-McMoRan, Freeport LNG, gun-free / drug-free
+   zones) and a whole-source blocklist (the Mexican outlet named "Zona
+   Franca", obituary and sports feeds), rejected without an AI call.
 5. **Title dedup**: the same wire story across outlets costs one call, not five.
 6. **Batching**: `FILTER_AI_BATCH_SIZE` articles per Gemini call, with
-   `thinkingBudget: 0` — classification is labelling, not reasoning.
-7. **Request budget** (`gemini_daily_request_budget`): the filter stops
-   cleanly at this number rather than discovering the real ceiling by taking
-   a 429 mid-batch.
+   `thinkingBudget: 0` — classification is labelling, not reasoning. The
+   prompt is strict: an article is kept only when it reports a concrete,
+   new fact (zone decision, rule change, large investment, national
+   infrastructure decision, rating change); mentioning a priority country
+   is never enough, and same-story duplicates inside a batch are rejected.
+   The GNews content snippet is sent alongside the description when it
+   adds something.
+7. **Request budget** (`gemini_daily_request_budget`, default 20): the
+   filter stops cleanly at this number rather than discovering the real
+   ceiling by taking a 429 mid-batch. The free tier for
+   `gemini-2.5-flash` measured ~20 requests/day (429 after 19–24 calls,
+   19–23 Sep 2026). `gemini_summary_reserve` (6) of those are left for
+   "Generate pending summaries", so the filter itself spends at most
+   budget − reserve.
 
 ### When a 429 does happen
 

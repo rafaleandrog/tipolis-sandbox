@@ -98,7 +98,7 @@ const APP = {
     case_sensitive: false,
     language: 'en',
     country: '',
-    max_results: 40,          // was 20 — raised so RSS-primary has room to work with
+    max_results: 10,          // GNews free tier returns at most 10 per request; also keeps daily volume inside the Gemini quota
     gemini_model: 'gemini-2.5-flash',
     daily_search_hour: 6,    // daily search runs ~06:00
     weekly_filter_hour: 7,   // AI classification runs ~07:00 (margin after search)
@@ -132,7 +132,12 @@ const APP = {
     FILTER_SAFE_MS: 5 * 60 * 1000,   // stop and continue before the 6-min cap
 
     // Fallbacks for the report_settings keys of the same name.
-    DEFAULT_GEMINI_DAILY_BUDGET: 200,
+    // The Gemini free tier for gemini-2.5-flash measured ~20 requests/day
+    // (logs 19-23 Sep 2026: 429 after 19-24 calls). The budget must sit at
+    // or below that, and part of it is reserved for summaries.
+    DEFAULT_GEMINI_DAILY_BUDGET: 20,
+    DEFAULT_GEMINI_SUMMARY_RESERVE: 6,
+    DEFAULT_MAX_RESULTS_CAP: 10,
     DEFAULT_MAX_ROWS_PER_SEARCH_RUN: 250,
     MAX_LOG_ROWS: 4000
   },
@@ -179,14 +184,22 @@ const SETTINGS_SEED = [
   ['weekly_filter_auto_run', 'true', 'Toggle the weekly AI filter trigger'],
   ['daily_filter_auto_run', 'true', 'Toggle the daily AI classification trigger'],
   ['frontend_bearer_token', '', 'Random 32+ char token the frontend must send — PASTE HERE'],
-  ['gemini_daily_request_budget', '200',
-    'Max Gemini requests per day. The filter stops cleanly at this number instead of discovering the quota by taking a 429.'],
+  ['gemini_daily_request_budget', '20',
+    'Max Gemini requests per day (free tier is ~20). The filter stops cleanly at this number instead of discovering the quota by taking a 429.'],
+  ['gemini_summary_reserve', '6',
+    'Gemini requests per day the AI filter leaves untouched so "Generate pending summaries" still works the same day.'],
+  ['search_source', 'gnews',
+    'gnews = GNews API first (real publisher links + description, as before 16 Sep 2026), Google News RSS only when GNews returns nothing. rss = RSS first.'],
+  ['max_results_cap', '10',
+    'Hard ceiling applied to every search_terms max_results value. Keeps the daily volume inside the Gemini quota.'],
   ['max_rows_per_search_run', '250',
     'Max rows a single daily search may write. Terms left over start first on the next run.'],
   ['topic_gate_mode', 'skip',
     'skip = off-topic articles are stored with FilterStatus="Skipped" (auditable, no AI cost); drop = not stored at all.'],
   ['gnews_fallback_enabled', 'false',
-    'Call the GNews API when Google News RSS returns nothing. Empty RSS usually means "no news", so this is off by default to save the GNews quota.']
+    'Only used when search_source = rss: call the GNews API when Google News RSS returns nothing.'],
+  ['rss_fallback_enabled', 'true',
+    'Only used when search_source = gnews: call Google News RSS when GNews returns nothing for a term.']
 ];
 
 // Seed vocabulary for the topic_keywords sheet — the local gate that decides
@@ -549,10 +562,14 @@ function formatApprovedSheet_(sheet) {
 
 /**************************************************************
  * TIPOLIS PRESS MONITOR — 02_Search.gs
- * Daily search. Google News RSS is the PRIMARY source (same engine
- * as a manual news.google.com search — diverse countries/sources,
- * not dominated by one prolific outlet); GNews API is a FALLBACK
- * used only when RSS returns nothing. Near-duplicate titles are
+ * Daily search. The GNews API is the PRIMARY source again (setting
+ * search_source = gnews): it returns the real publisher URL plus a
+ * description and a content snippet, which is what the AI filter and
+ * the summaries need. Between 16 and 23 Sep 2026 Google News RSS was
+ * primary; its links are news.google.com redirects with only the
+ * headline as description, so Gemini classified blind and volume went
+ * from ~45 to 250-530 rows/day. RSS is now the FALLBACK, used only
+ * when GNews returns nothing for a term. Near-duplicate titles are
  * deduped before the max_results cut. Appends new rows to
  * search_results. Dedups by URL against search_results (current
  * accumulator) and approved_history.
@@ -785,6 +802,8 @@ function getActiveTermRules_(sheet) {
   const lastRow = getLastDataRowInCols_(sheet, 1, APP.HEADERS.TERMS.length);
   if (lastRow < 2) return [];
   const data = sheet.getRange(2, 1, lastRow - 1, APP.HEADERS.TERMS.length).getValues();
+  // Hard ceiling on every term's max_results (report_settings: max_results_cap).
+  const cap = toPositiveInt_(getSetting_('max_results_cap'), APP.LIMITS.DEFAULT_MAX_RESULTS_CAP);
   const rules = [];
   for (let i = 0; i < data.length; i++) {
     const row = data[i];
@@ -799,39 +818,50 @@ function getActiveTermRules_(sheet) {
       caseSensitive: toBoolean_(row[4], APP.DEFAULTS.case_sensitive),
       language: normalizeLanguage_(row[5]),
       country: normalizeCountry_(row[6]),
-      maxResults: Math.min(100, Math.max(1, toPositiveInt_(row[7], APP.DEFAULTS.max_results)))
+      maxResults: Math.min(cap, 100, Math.max(1, toPositiveInt_(row[7], APP.DEFAULTS.max_results)))
     });
   }
   return rules;
 }
 
-/* ---------- Fetching (RSS primary, GNews fallback) ---------- */
+/* ---------- Fetching (GNews primary, RSS fallback) ---------- */
 
 /**
- * Google News RSS is the same engine behind a manual news.google.com
- * search — it naturally surfaces diverse countries/sources instead of
- * being dominated by whichever outlet republishes the most. It's used
- * first; GNews API only kicks in if RSS comes back empty for a term.
+ * search_source = gnews (default): GNews API first. It returns the real
+ * publisher URL, a description and a content snippet, so the AI filter
+ * sees what the article is about and the summary can fetch the full text.
+ * Google News RSS is used only when GNews returns nothing for the term
+ * (no news in the window, or the GNews daily quota was hit — the log says
+ * which), and only if rss_fallback_enabled is not "false".
+ *
+ * search_source = rss: the previous behaviour (RSS first, GNews fallback
+ * only when gnews_fallback_enabled = true).
+ *
  * Near-duplicate titles (the same wire story in 5 outlets) are removed
  * BEFORE the max_results cut, so real diversity survives the cap.
  */
 function fetchNewsForRule_(rule) {
-  const rssItems = fetchFromGoogleNewsRss_(rule);
-  let items = dedupeByTitle_(rssItems).slice(0, rule.maxResults);
+  const source = String(getSetting_('search_source') || 'gnews').trim().toLowerCase();
+  let items;
 
-  // An empty RSS response almost always means "no news for this term in
-  // this window", not "the source failed" — so the GNews fallback mostly
-  // spends a limited third-party quota to confirm a zero. Off by default;
-  // flip gnews_fallback_enabled in report_settings to bring it back.
-  if (!items.length && isSettingTrue_('gnews_fallback_enabled', false)) {
-    log_('fetchNewsForRule', `RSS empty for "${rule.term}". Trying GNews API fallback.`);
+  if (source === 'rss') {
+    items = dedupeByTitle_(fetchFromGoogleNewsRss_(rule)).slice(0, rule.maxResults);
+    if (!items.length && isSettingTrue_('gnews_fallback_enabled', false)) {
+      log_('fetchNewsForRule', `RSS empty for "${rule.term}". Trying GNews API fallback.`);
+      items = dedupeByTitle_(fetchFromGNewsApi_(rule)).slice(0, rule.maxResults);
+    }
+  } else {
     items = dedupeByTitle_(fetchFromGNewsApi_(rule)).slice(0, rule.maxResults);
+    if (!items.length && isSettingTrue_('rss_fallback_enabled', true)) {
+      log_('fetchNewsForRule', `GNews empty for "${rule.term}". Trying Google News RSS fallback.`);
+      items = dedupeByTitle_(fetchFromGoogleNewsRss_(rule)).slice(0, rule.maxResults);
+    }
   }
 
   // Cheap, local (no network) resolution of old-format Google News redirect
-  // links to the real publisher URL. New-format links that need a network
-  // call are resolved later, only for approved items (see 05_AISummary.gs),
-  // to keep this bulk search step fast and inside the execution time limit.
+  // links to the real publisher URL (RSS fallback rows only). New-format
+  // links that need a network call are resolved later, only for approved
+  // items (see 05_AISummary.gs), to keep this bulk step inside the time limit.
   return items.map(item => {
     if (item.link && item.link.indexOf('news.google.com') >= 0) {
       const cheap = resolveArticleUrl_(item.link, /*allowNetwork*/ false);
@@ -1350,7 +1380,11 @@ function runAIFilter_() {
 
     // Stop at a self-imposed request budget instead of discovering the real
     // ceiling by taking a 429 in the middle of a batch.
+    // Part of the daily budget is reserved for summaries, so approving and
+    // summarising articles still works on a day the filter was busy.
     const budget = geminiBudget_();
+    const reserve = toPositiveInt_(getSetting_('gemini_summary_reserve'), APP.LIMITS.DEFAULT_GEMINI_SUMMARY_RESERVE);
+    budget.left = Math.max(0, budget.left - reserve);
     if (!budget.left) {
       scheduleFilterContinuationAfterQuotaReset_();
       log_('runAIFilter',
@@ -1543,21 +1577,41 @@ function bumpErrorStatus_(current) {
 
 function buildFilterSystemPrompt_(countriesText) {
   return [
-    'You are a relevance classifier for the Tipolis weekly press summary.',
+    'You are a STRICT relevance classifier for the Tipolis weekly press summary.',
+    'A human editor reads every article you keep, and only has time for a few dozen a week. When in doubt, reject.',
     '',
     'Tipolis priority countries:',
     countriesText,
     '',
-    'Tracked projects: Próspera, Destiny, ZEDE, SSZ, Gelephu Mindfulness City, TechParkCV, Sherbro Island, Alpha Cities, Network States, Charter Cities.',
+    'Tracked projects: Próspera, Destiny, ZEDE, SSZ, Gelephu Mindfulness City, TechParkCV, Sherbro Island, Alpha Cities, Network States, Charter Cities, Bitcoin City.',
     '',
     'You will receive MULTIPLE articles, each with a numeric "id". Classify EACH one and return JSON only as {"results": [ ... ]}, with exactly one entry per article, echoing its "id".',
-    'Rules per article:',
-    '- "category" is the ONLY field that decides whether the article is kept. Set it to "reject" when: it mentions a priority country but for an unrelated topic (sports, weather, entertainment, generic crime, public health, culture); or it is promotional/opinion-only/fact-free.',
-    '- "tipolis": ties a priority country OR a tracked project to a relevant topic (SEZ, free zone, private city, charter city, governance, investment, infrastructure, citizenship, regulatory reform).',
-    '- "industry": SEZs / free zones / private cities / charter cities / network states / regulatory sandboxes / governance innovation / industrial corridors / technology hubs in a country NOT on the priority list.',
-    '- Ties go to "tipolis" when any clear link to a priority country/project exists.',
-    '- "relevance" is NEVER "reject" and never contradicts "category": it is only a priority signal (high/medium/low) for how strongly to feature an article whose category is "tipolis" or "industry". If category is "reject", set relevance to "low".',
-    '- country: canonical English name, or "Multiple", or "Global". region: one of Africa, Caribbean, Latin America, North America, Europe, Middle East, South Asia, Southeast Asia, East Asia, Oceania, Global.'
+    '',
+    'KEEP as "tipolis" ONLY when a priority country or tracked project is the subject AND the article reports a concrete, new fact about one of:',
+    '  (a) a special economic zone, free zone, freeport zone, charter/private city or a tracked project (approval, launch, law, investment, construction, controversy);',
+    '  (b) a law, regulation, tax or governance reform that changes the rules for investors or residents (including citizenship/residency by investment, digital assets, bitcoin policy);',
+    '  (c) a large foreign or strategic investment (roughly USD 100 million or more), or an investor-state dispute / international arbitration;',
+    '  (d) a national-scale infrastructure project (port, power, transport, digital) with a decision, contract, tender or financing;',
+    '  (e) a sovereign credit-rating change or a record foreign-direct-investment figure.',
+    'Mentioning a priority country is NEVER enough on its own.',
+    '',
+    'KEEP as "industry" ONLY when the article reports a concrete decision or fact about a specific SEZ, free zone, freeport zone, charter/private city, network state, regulatory sandbox or industrial corridor in a country NOT on the priority list: zone approved, launched or expanded; zone law or regulation changed; significant investment or financial close inside a zone.',
+    '',
+    'REJECT (category "reject") everything else, in particular:',
+    '  - sports, culture, entertainment, religion, weather, natural hazards, crime, health, obituaries, human-interest;',
+    '  - diplomatic visits, greetings, anniversaries, bilateral "strengthen ties" statements, territorial or border disputes;',
+    '  - election campaigns, candidacies and candidates\' promises;',
+    '  - GDP, export, trade or sector statistics, central-bank rate decisions, stock/market/analyst news;',
+    '  - company-level news and small commercial deals, air routes, tourism promotion;',
+    '  - MoUs, partnerships, awards, forums, fairs, events and promotional pitches without a concrete decision or investment;',
+    '  - opinion pieces, editorials, columns and explainers that report no new fact;',
+    '  - local community, CSR, training or small-works news inside a zone;',
+    '  - homonyms: towns called Freeport, Freeport-McMoRan, Freeport LNG, "gun-free / drug-free / car-free zones", "Model City" neighbourhoods or the US "Model Cities" grant, the Mexican news outlet named "Zona Franca", administrative "special zones" of Vietnam, STP = sewage treatment plant or investment plan, Prospera as a game or product, "bitcoin bond" as a crypto staking product.',
+    '',
+    '- Same story: if two or more articles in this batch report the same event, keep only the most informative one and reject the others with reason "Same story as id N."',
+    '- "relevance" is NEVER "reject" and never contradicts "category": high = must be in the report; medium = likely; low = borderline. If category is "reject", relevance is "low".',
+    '- country: canonical English name, or "Multiple", or "Global". region: one of Africa, Caribbean, Latin America, North America, Europe, Middle East, South Asia, Southeast Asia, East Asia, Oceania, Global.',
+    '- reason: one short sentence naming the concrete fact that justifies keeping it, or why it was rejected.'
   ].join('\n');
 }
 
@@ -1566,10 +1620,17 @@ function buildFilterBatchUserPrompt_(batch) {
   const parts = ['Classify each article below. Return {"results":[...]} with one entry per id.', ''];
   batch.forEach((p, idx) => {
     const row = p.row;
+    const title = String(row[C.TITLE - 1] || '');
+    const desc = String(row[C.DESCRIPTION - 1] || '');
+    const content = String(row[C.CONTENT - 1] || '');
     parts.push(`--- id: ${idx + 1} ---`);
     parts.push(`Source: ${row[C.SOURCE - 1]}`);
-    parts.push(`Title: ${row[C.TITLE - 1]}`);
-    parts.push(`Description: ${truncate_(String(row[C.DESCRIPTION - 1] || ''), 400)}`);
+    parts.push(`Title: ${title}`);
+    parts.push(`Description: ${truncate_(desc, 400)}`);
+    // GNews also returns a content snippet; send it when it adds something.
+    if (content && content !== desc && content.indexOf(title) !== 0) {
+      parts.push(`Content: ${truncate_(content, 400)}`);
+    }
     parts.push(`Search term: ${row[C.TERM - 1]}`);
     parts.push('');
   });
@@ -1618,11 +1679,28 @@ function prefilterReject_(title, description, source) {
     'literary prize', 'exposição', 'concerto', 'documentário', 'pillow cover',
     'wuling',
     'ebola', 'ébola', 'hantavirus', 'hantavírus', 'measles', 'rodent-borne',
-    'iguanas', 'sea turtles', 'tartarugas'
+    'iguanas', 'sea turtles', 'tartarugas',
+    // Homonyms seen in the 17-23 Sep 2026 flood (freeport / free zone terms).
+    'freeport-mcmoran', 'freeport mcmoran', 'freeport lng', 'freeport area',
+    'gun-free', 'drug-free', 'car-free', 'winery-free', 'politics free zone',
+    'obituary', 'funeral home', 'volleyball', 'varsity'
   ];
   for (let i = 0; i < noise.length; i++) {
     if (text.indexOf(noise[i]) >= 0) return noise[i];
   }
+  // Whole-source blocklist (exact source name, case-insensitive). These
+  // outlets never publish anything on the beat; "Zona Franca" is a Mexican
+  // local news site whose name matches the "zona franca" search term.
+  const src = String(source || '').trim().toLowerCase();
+  const blockedSources = [
+    'zona franca', 'freeport journal-standard', 'journalstandard.com', 'liherald.com',
+    'herald community newspapers', 'legacy obituary', 'nfhs network', 'maxpreps',
+    'flightradar24', 'iqair', 'weather underground', 'volcano discovery',
+    'transfermarkt', 'sofascore', 'fiba.basketball', 'racing queensland',
+    'racingqueensland.com.au', 'diario as', 'bleacher report', 'onefootball',
+    'dvids', 'apwin', 'sportytrader', 'odds scanner', '365scores', 'tod'
+  ];
+  if (blockedSources.indexOf(src) >= 0) return 'source: ' + src;
   return null;
 }
 

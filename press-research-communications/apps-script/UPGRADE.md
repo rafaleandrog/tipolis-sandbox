@@ -46,6 +46,52 @@ example (see below).
 
 ---
 
+## Release 2026-09-23 — GNews primary again, stricter AI filter
+
+Between 16 and 23 Sep 2026 Google News RSS was the primary source. Its links
+are `news.google.com` redirects with only the headline as description, so
+Gemini classified blind and daily volume went from ~45 to 250–530 rows, while
+the Gemini free tier for `gemini-2.5-flash` turned out to be ~20 requests/day
+(429 after 19–24 calls). This release:
+
+- makes the **GNews API the primary source** again (`search_source = gnews`),
+  with Google News RSS only when GNews returns nothing for a term;
+- caps every term at **10 results** (`max_results_cap`);
+- sets the **Gemini budget to 20/day**, keeping **6** for summaries
+  (`gemini_summary_reserve`);
+- tightens the **classification prompt** (concrete new facts only, homonyms
+  and same-story duplicates rejected) and sends the GNews content snippet;
+- extends the **prefilter** with homonyms (Freeport-McMoRan, gun-free zones…)
+  and a whole-source blocklist (the "Zona Franca" outlet, obituary and sports
+  feeds).
+
+No frontend dependency: the backend can be deployed at any time.
+
+| # | Do this | Expect |
+|---|---|---|
+| 1 | Paste the consolidated build, then **new version** of the deployment | Web App URL unchanged |
+| 2 | `Tipolis → Create / repair project sheets` | Four keys appended to `report_settings`: `gemini_summary_reserve` (6), `search_source` (gnews), `max_results_cap` (10), `rss_fallback_enabled` (true) |
+| 3 | **Edit `gemini_daily_request_budget` by hand: 200 → 20** | The repair step only adds *missing* keys, so the old 200 stays until you change it — and with 200 the filter keeps running into 429s |
+| 4 | Check `gnews_api_key` is filled in `report_settings` | GNews is the primary source now; with an empty key every term falls back to RSS |
+| 5 | `Tipolis → Run daily search now` (or wait for 06:00) | `logs` shows GNews fetches; `GNews empty for "…". Trying Google News RSS fallback.` only for terms with no GNews news |
+| 6 | `Tipolis → Run AI classification now` | Stops at 14 requests (20 − 6 reserve); `Generate pending summaries` still works the same day |
+
+`max_results` values above 10 in `search_terms` do not need editing — the cap
+clamps them at read time. To go back to RSS-first without a redeploy, set
+`search_source = rss`.
+
+### Rollback
+
+```bash
+git show 2cbb05a:press-research-communications/Tipolis_Press_Monitor.consolidated.gs
+```
+
+Paste that, deploy a new version, and set `gemini_daily_request_budget` back
+if you want the old number. The new settings keys can stay — the older code
+ignores them.
+
+---
+
 ## Release 2026-09-17 — Gemini quota fix
 
 Backend: quota-aware AI filter, thematic gate, triage without a date window.
