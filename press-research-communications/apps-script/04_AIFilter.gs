@@ -111,7 +111,11 @@ function runAIFilter_() {
 
     // Stop at a self-imposed request budget instead of discovering the real
     // ceiling by taking a 429 in the middle of a batch.
+    // Part of the daily budget is reserved for summaries, so approving and
+    // summarising articles still works on a day the filter was busy.
     const budget = geminiBudget_();
+    const reserve = toPositiveInt_(getSetting_('gemini_summary_reserve'), APP.LIMITS.DEFAULT_GEMINI_SUMMARY_RESERVE);
+    budget.left = Math.max(0, budget.left - reserve);
     if (!budget.left) {
       scheduleFilterContinuationAfterQuotaReset_();
       log_('runAIFilter',
@@ -304,21 +308,41 @@ function bumpErrorStatus_(current) {
 
 function buildFilterSystemPrompt_(countriesText) {
   return [
-    'You are a relevance classifier for the Tipolis weekly press summary.',
+    'You are a STRICT relevance classifier for the Tipolis weekly press summary.',
+    'A human editor reads every article you keep, and only has time for a few dozen a week. When in doubt, reject.',
     '',
     'Tipolis priority countries:',
     countriesText,
     '',
-    'Tracked projects: Próspera, Destiny, ZEDE, SSZ, Gelephu Mindfulness City, TechParkCV, Sherbro Island, Alpha Cities, Network States, Charter Cities.',
+    'Tracked projects: Próspera, Destiny, ZEDE, SSZ, Gelephu Mindfulness City, TechParkCV, Sherbro Island, Alpha Cities, Network States, Charter Cities, Bitcoin City.',
     '',
     'You will receive MULTIPLE articles, each with a numeric "id". Classify EACH one and return JSON only as {"results": [ ... ]}, with exactly one entry per article, echoing its "id".',
-    'Rules per article:',
-    '- "category" is the ONLY field that decides whether the article is kept. Set it to "reject" when: it mentions a priority country but for an unrelated topic (sports, weather, entertainment, generic crime, public health, culture); or it is promotional/opinion-only/fact-free.',
-    '- "tipolis": ties a priority country OR a tracked project to a relevant topic (SEZ, free zone, private city, charter city, governance, investment, infrastructure, citizenship, regulatory reform).',
-    '- "industry": SEZs / free zones / private cities / charter cities / network states / regulatory sandboxes / governance innovation / industrial corridors / technology hubs in a country NOT on the priority list.',
-    '- Ties go to "tipolis" when any clear link to a priority country/project exists.',
-    '- "relevance" is NEVER "reject" and never contradicts "category": it is only a priority signal (high/medium/low) for how strongly to feature an article whose category is "tipolis" or "industry". If category is "reject", set relevance to "low".',
-    '- country: canonical English name, or "Multiple", or "Global". region: one of Africa, Caribbean, Latin America, North America, Europe, Middle East, South Asia, Southeast Asia, East Asia, Oceania, Global.'
+    '',
+    'KEEP as "tipolis" ONLY when a priority country or tracked project is the subject AND the article reports a concrete, new fact about one of:',
+    '  (a) a special economic zone, free zone, freeport zone, charter/private city or a tracked project (approval, launch, law, investment, construction, controversy);',
+    '  (b) a law, regulation, tax or governance reform that changes the rules for investors or residents (including citizenship/residency by investment, digital assets, bitcoin policy);',
+    '  (c) a large foreign or strategic investment (roughly USD 100 million or more), or an investor-state dispute / international arbitration;',
+    '  (d) a national-scale infrastructure project (port, power, transport, digital) with a decision, contract, tender or financing;',
+    '  (e) a sovereign credit-rating change or a record foreign-direct-investment figure.',
+    'Mentioning a priority country is NEVER enough on its own.',
+    '',
+    'KEEP as "industry" ONLY when the article reports a concrete decision or fact about a specific SEZ, free zone, freeport zone, charter/private city, network state, regulatory sandbox or industrial corridor in a country NOT on the priority list: zone approved, launched or expanded; zone law or regulation changed; significant investment or financial close inside a zone.',
+    '',
+    'REJECT (category "reject") everything else, in particular:',
+    '  - sports, culture, entertainment, religion, weather, natural hazards, crime, health, obituaries, human-interest;',
+    '  - diplomatic visits, greetings, anniversaries, bilateral "strengthen ties" statements, territorial or border disputes;',
+    '  - election campaigns, candidacies and candidates\' promises;',
+    '  - GDP, export, trade or sector statistics, central-bank rate decisions, stock/market/analyst news;',
+    '  - company-level news and small commercial deals, air routes, tourism promotion;',
+    '  - MoUs, partnerships, awards, forums, fairs, events and promotional pitches without a concrete decision or investment;',
+    '  - opinion pieces, editorials, columns and explainers that report no new fact;',
+    '  - local community, CSR, training or small-works news inside a zone;',
+    '  - homonyms: towns called Freeport, Freeport-McMoRan, Freeport LNG, "gun-free / drug-free / car-free zones", "Model City" neighbourhoods or the US "Model Cities" grant, the Mexican news outlet named "Zona Franca", administrative "special zones" of Vietnam, STP = sewage treatment plant or investment plan, Prospera as a game or product, "bitcoin bond" as a crypto staking product.',
+    '',
+    '- Same story: if two or more articles in this batch report the same event, keep only the most informative one and reject the others with reason "Same story as id N."',
+    '- "relevance" is NEVER "reject" and never contradicts "category": high = must be in the report; medium = likely; low = borderline. If category is "reject", relevance is "low".',
+    '- country: canonical English name, or "Multiple", or "Global". region: one of Africa, Caribbean, Latin America, North America, Europe, Middle East, South Asia, Southeast Asia, East Asia, Oceania, Global.',
+    '- reason: one short sentence naming the concrete fact that justifies keeping it, or why it was rejected.'
   ].join('\n');
 }
 
@@ -327,10 +351,17 @@ function buildFilterBatchUserPrompt_(batch) {
   const parts = ['Classify each article below. Return {"results":[...]} with one entry per id.', ''];
   batch.forEach((p, idx) => {
     const row = p.row;
+    const title = String(row[C.TITLE - 1] || '');
+    const desc = String(row[C.DESCRIPTION - 1] || '');
+    const content = String(row[C.CONTENT - 1] || '');
     parts.push(`--- id: ${idx + 1} ---`);
     parts.push(`Source: ${row[C.SOURCE - 1]}`);
-    parts.push(`Title: ${row[C.TITLE - 1]}`);
-    parts.push(`Description: ${truncate_(String(row[C.DESCRIPTION - 1] || ''), 400)}`);
+    parts.push(`Title: ${title}`);
+    parts.push(`Description: ${truncate_(desc, 400)}`);
+    // GNews also returns a content snippet; send it when it adds something.
+    if (content && content !== desc && content.indexOf(title) !== 0) {
+      parts.push(`Content: ${truncate_(content, 400)}`);
+    }
     parts.push(`Search term: ${row[C.TERM - 1]}`);
     parts.push('');
   });
@@ -379,11 +410,28 @@ function prefilterReject_(title, description, source) {
     'literary prize', 'exposição', 'concerto', 'documentário', 'pillow cover',
     'wuling',
     'ebola', 'ébola', 'hantavirus', 'hantavírus', 'measles', 'rodent-borne',
-    'iguanas', 'sea turtles', 'tartarugas'
+    'iguanas', 'sea turtles', 'tartarugas',
+    // Homonyms seen in the 17-23 Sep 2026 flood (freeport / free zone terms).
+    'freeport-mcmoran', 'freeport mcmoran', 'freeport lng', 'freeport area',
+    'gun-free', 'drug-free', 'car-free', 'winery-free', 'politics free zone',
+    'obituary', 'funeral home', 'volleyball', 'varsity'
   ];
   for (let i = 0; i < noise.length; i++) {
     if (text.indexOf(noise[i]) >= 0) return noise[i];
   }
+  // Whole-source blocklist (exact source name, case-insensitive). These
+  // outlets never publish anything on the beat; "Zona Franca" is a Mexican
+  // local news site whose name matches the "zona franca" search term.
+  const src = String(source || '').trim().toLowerCase();
+  const blockedSources = [
+    'zona franca', 'freeport journal-standard', 'journalstandard.com', 'liherald.com',
+    'herald community newspapers', 'legacy obituary', 'nfhs network', 'maxpreps',
+    'flightradar24', 'iqair', 'weather underground', 'volcano discovery',
+    'transfermarkt', 'sofascore', 'fiba.basketball', 'racing queensland',
+    'racingqueensland.com.au', 'diario as', 'bleacher report', 'onefootball',
+    'dvids', 'apwin', 'sportytrader', 'odds scanner', '365scores', 'tod'
+  ];
+  if (blockedSources.indexOf(src) >= 0) return 'source: ' + src;
   return null;
 }
 

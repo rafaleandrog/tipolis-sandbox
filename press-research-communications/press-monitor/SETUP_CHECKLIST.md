@@ -100,10 +100,14 @@ others depend on Drive/AI Studio steps.
 
 | key | default | what it does |
 |---|---|---|
-| `gemini_daily_request_budget` | `200` | The classifier stops at this many Gemini requests per day instead of discovering the real ceiling by taking a 429 mid-batch. |
+| `gemini_daily_request_budget` | `20` | Gemini requests per day (the free tier for `gemini-2.5-flash` is ~20). The classifier stops at this number instead of discovering the real ceiling by taking a 429 mid-batch. |
+| `gemini_summary_reserve` | `6` | Part of the daily budget the classifier leaves untouched, so "Generate pending summaries" still works the same day. |
+| `search_source` | `gnews` | `gnews` = GNews API first (real publisher link + description), Google News RSS only when GNews returns nothing. `rss` = RSS first. |
+| `max_results_cap` | `10` | Hard ceiling on every `search_terms` `max_results` value. |
 | `max_rows_per_search_run` | `250` | Cap on AI-bound rows a single daily search may write. Terms that did not fit start the next run. |
 | `topic_gate_mode` | `skip` | `skip` parks off-topic articles as `FilterStatus="Skipped"` (auditable, no AI cost); `drop` stops storing them. Start on `skip`, read what it parked for a week, then switch. |
-| `gnews_fallback_enabled` | `false` | Call the GNews API when Google News RSS returns nothing. An empty RSS almost always means "no news", so this mostly spends a limited quota to confirm a zero. |
+| `rss_fallback_enabled` | `true` | Only with `search_source = gnews`: call Google News RSS when GNews returns nothing for a term. |
+| `gnews_fallback_enabled` | `false` | Only with `search_source = rss`: call the GNews API when Google News RSS returns nothing. |
 | `daily_filter_auto_run` | `true` | Toggle for the daily AI classification trigger. |
 
 ## Phase 4 — Activate the pipeline

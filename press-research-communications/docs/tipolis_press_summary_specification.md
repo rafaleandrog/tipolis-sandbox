@@ -123,8 +123,11 @@ keep the number of classification calls proportional to the number of
 articles that are plausibly about the beat — not to the number of articles a
 broad search term drags in.
 
-Search terms stay deliberately broad (`Uruguay`, `freeport`, `SEZ`). The
-filtering happens after the fetch, in this order:
+Search terms stay deliberately broad (`Uruguay`, `freeport`, `SEZ`), each
+capped at `max_results_cap` (10) results. The GNews API is the primary source
+(`search_source = gnews`) because it returns the publisher URL, a description
+and a content snippet; Google News RSS is used only when GNews returns nothing
+for a term. The filtering happens after the fetch, in this order:
 
 1. **Thematic gate** (`topic_keywords` sheet, `topicGateVerdict_` in
    `02_Search.gs`) — two vocabularies chosen by the sheet's `mode` column.
@@ -140,13 +143,18 @@ filtering happens after the fetch, in this order:
 2. **Row cap** (`max_rows_per_search_run`) — bounds a single search run.
    Terms that did not fit start the next run, so the cap rotates rather than
    permanently starving the tail of `search_terms`.
-3. **Blocklist** (`prefilterReject_`) — literal noise strings, no AI call.
+3. **Blocklist** (`prefilterReject_`) — literal noise strings and homonyms
+   (Freeport-McMoRan, gun-free zones…) plus a whole-source blocklist
+   (the "Zona Franca" outlet, obituary and sports feeds), no AI call.
 4. **Title dedup** (`normalizeTitleForDedup_`) — one wire story across five
    outlets costs one call.
 5. **Batching** — `FILTER_AI_BATCH_SIZE` articles per call, with
    `thinkingBudget: 0`, because classification is labelling against a fixed
-   schema rather than reasoning.
-6. **Request budget** (`gemini_daily_request_budget`) — the filter stops at
+   schema rather than reasoning. The prompt is strict — keep only concrete,
+   new facts; a priority-country mention alone is never enough; when in
+   doubt, reject.
+6. **Request budget** (`gemini_daily_request_budget`, default 20, of which
+   `gemini_summary_reserve` = 6 are kept for summaries) — the filter stops at
    a number it chose, instead of discovering the real ceiling by taking a
    429 in the middle of a batch.
 

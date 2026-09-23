@@ -41,7 +41,7 @@ the Google Sheet, the AI Studio key, and the Drive folder. The short version:
 3. Run the menu item **Tipolis → Create / repair project sheets** once.
 4. Open the `report_settings` sheet and fill the empty values:
    - `gemini_api_key`
-   - `gnews_api_key` (optional — fallback only)
+   - `gnews_api_key` (primary search source)
    - `report_drive_folder_id`
    - `report_template_doc_id`
    - `frontend_bearer_token` (any random 32+ char string)
