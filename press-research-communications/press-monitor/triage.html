@@ -250,7 +250,8 @@
       function friendlyManualError(msg) {
         if (/URL is required/i.test(msg)) return 'Informe uma URL.';
         if (/already in search_results|already in approved_history/i.test(msg)) return 'Essa notícia já está na lista.';
-        if (/Could not fetch URL/i.test(msg)) return 'Não consegui abrir esse link, confira se está correto.';
+        if (/Could not fetch URL \(HTTP (404|410)\)/i.test(msg)) return 'Esse link não existe (erro 404), confira se está correto.';
+        if (/Could not fetch URL/i.test(msg)) return 'Não consegui abrir esse link, confira se está correto. (' + msg + ')';
         return msg || 'Não foi possível adicionar o link.';
       }
 
@@ -282,6 +283,9 @@
           if (data.category) bits.push(data.category);
           if (data.relevance) bits.push('relevance: ' + data.relevance);
           PM.toast('Adicionado: "' + (data.title || url) + '"' + (bits.length ? ' (' + bits.join(', ') + ')' : ''), 'success');
+          if (data.fetchBlockedCode) {
+            PM.toast('O site bloqueou a leitura automática (HTTP ' + data.fetchBlockedCode + '). Adicionei só com o link, sem título nem resumo.', 'info');
+          }
           await load();
         } catch (err) {
           if (err.name !== 'Unauthorized') {

@@ -333,20 +333,39 @@ function api_addManualLink_(body) {
   resultsSheet.getRange(startRow, APP.COL.RESULTS.FILTER_STATUS).setValue('Done');
 
   log_('addManualLink', `Manual link added at row ${startRow}: ${truncate_(url, 100)}`);
-  return { row: startRow, title: meta.title, source: meta.source, category: category, relevance: relevance };
+  return {
+    row: startRow, title: meta.title, source: meta.source, category: category, relevance: relevance,
+    fetchBlockedCode: meta.fetchBlockedCode || null
+  };
 }
 
 // Scrapes title/description/source/publishedAt from a bare URL using
 // og:* and standard meta tags, falling back gracefully when absent.
 function fetchArticleMetadata_(url) {
-  const resp = UrlFetchApp.fetch(url, {
-    method: 'get', muteHttpExceptions: true, followRedirects: true,
-    headers: { 'User-Agent': APP.USER_AGENT, 'Accept': 'text/html,application/xhtml+xml,*/*' }
-  });
-  const code = resp.getResponseCode();
-  if (code < 200 || code >= 300) throw new Error(`Could not fetch URL (HTTP ${code}).`);
-  const html = resp.getContentText();
   const hostname = url.match(/^https?:\/\/([^\/]+)/) ? RegExp.$1.replace(/^www\./, '') : '';
+  let resp;
+  try {
+    resp = UrlFetchApp.fetch(url, {
+      method: 'get', muteHttpExceptions: true, followRedirects: true,
+      headers: { 'User-Agent': APP.USER_AGENT, 'Accept': 'text/html,application/xhtml+xml,*/*' }
+    });
+  } catch (err) {
+    // Malformed URL / DNS failure: the link itself is unusable.
+    throw new Error(`Could not fetch URL (${getErrorMessage_(err)}).`);
+  }
+  const code = resp.getResponseCode();
+  // 404/410 mean the link really is wrong. Any other non-2xx (403/429 anti-bot,
+  // 5xx, ...) usually means the site blocks Google's servers while a human
+  // browser can open it fine, so keep the link and flag it instead of failing.
+  if (code === 404 || code === 410) throw new Error(`Could not fetch URL (HTTP ${code}).`);
+  if (code < 200 || code >= 300) {
+    log_('fetchArticleMetadata', `HTTP ${code} for ${truncate_(url, 120)} — adding with link only.`);
+    return {
+      title: '', description: '', source: hostname, hostname: hostname,
+      publishedAt: '', content: '', fetchBlockedCode: code
+    };
+  }
+  const html = resp.getContentText();
 
   const meta = (prop) => {
     const m = html.match(new RegExp(
